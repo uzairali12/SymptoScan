@@ -5,3 +5,9 @@ pandas
 scikit-learn
 joblib
 numpy
+supabase
+python-dotenv
+pydantic
+pytest
+requests
+pytest-cov
