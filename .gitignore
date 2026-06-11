@@ -1,0 +1,64 @@
+# Python Core Artifacts
+venv/
+.venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.Python
+*.so
+
+# Distribution / Packaging
+bin/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Environment Secrets (CRITICAL for Supabase/API tokens)
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# Vercel Deployment Cache
+.vercel/
+
+# IDE and Editor Workspace Configurations
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-project
+*.sublime-workspace
+
+# Operating System Garbage
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Application Logs
+*.log
+
+# ==========================================
+# 🛑 PROJECT-SPECIFIC DATA & MODEL PROTECTION
+# ==========================================
+# Keeps your heavy model binaries and training tables out of Git.
+# Render will pull these files directly from your repository branch, 
+# so if you WANT them deployed, keep them tracked. 
+# UNCOMMENT (remove the #) below IF you choose to host files elsewhere:
+# api/data/*.csv
+# api/models/*.pkl
