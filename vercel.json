@@ -1,5 +1,10 @@
 {
   "cleanUrls": true,
+  "functions": {
+    "api/**/*": {
+      "includeFiles": "none"
+    }
+  },
   "rewrites": [
     {
       "source": "/",
