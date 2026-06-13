@@ -2,7 +2,17 @@
 // SymptoScan App.js (PRODUCTION RUNTIME COMPATIBLE)
 // ============================================================
 
-const API_URL = window.API_URL || "http://127.0.0.1:8000";
+const getApiUrl = () => {
+  if (window.API_URL) return window.API_URL;
+
+  if (window.location.hostname === "localhost") {
+    return "http://127.0.0.1:8000";
+  }
+
+  return "https://uzairq2qwq-symptoscan-backend.hf.space";
+};
+
+const API_URL = getApiUrl();
 const SUPABASE_URL = window.SUPABASE_URL || "https://uygmvinepffbxfpblvra.supabase.co";
 const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || "sb_publishable_q07H8qPV14nMqIFoS8qvkg_JqBqtzGv";
 
