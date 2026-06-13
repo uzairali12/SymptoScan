@@ -133,47 +133,89 @@
   </section>
 
   <section id="view-result" class="view hidden">
-    <div class="container">
-      <div class="section-header">
-        <div><span class="section-label">Diagnosis Result</span><h2>Review your analysis</h2></div>
-        <button class="btn btn-ghost btn-sm" onclick="go('dashboard')"><i class="ti ti-refresh"></i> New check</button>
+  <div class="container">
+
+    <div class="section-header">
+      <div>
+        <span class="section-label">Diagnosis Result</span>
+        <h2>Review your analysis</h2>
       </div>
-      <div class="result-grid">
-        <div class="panel panel-glow">
-          <div class="result-top">
-            <div>
-              <div class="disease-name" id="result-disease">—</div>
-              <div class="result-date" id="result-date"></div>
-            </div>
-            <span class="sev-badge sev-medium" id="result-sev">Medium risk</span>
+      <button class="btn btn-ghost btn-sm" onclick="go('dashboard')">
+        <i class="ti ti-refresh"></i> New check
+      </button>
+    </div>
+
+    <!-- ── Primary result row ─────────────────────────── -->
+    <div class="result-grid">
+
+      <!-- Left: disease + confidence + description -->
+      <div class="panel panel-glow">
+        <div class="result-top">
+          <div>
+            <div class="disease-name" id="result-disease">—</div>
+            <div class="result-date"  id="result-date"></div>
           </div>
-          <div class="conf-block">
-            <div class="conf-row">
-              <span class="conf-label">Confidence score</span>
-              <span class="conf-value" id="result-conf">—</span>
-            </div>
-            <div class="conf-track"><div class="conf-fill" id="conf-fill"></div></div>
+          <span class="sev-badge sev-medium" id="result-sev">Medium Risk</span>
+        </div>
+
+        <div class="conf-block">
+          <div class="conf-row">
+            <span class="conf-label">Confidence score</span>
+            <span class="conf-value" id="result-conf">—</span>
           </div>
-          <div class="insight-section">
-            <h4>Clinical insight</h4>
-            <p id="result-desc" style="margin-top:8px">Run an analysis to view the clinical summary.</p>
+          <div class="conf-track">
+            <div class="conf-fill" id="conf-fill"></div>
           </div>
         </div>
-        <div class="panel panel-soft">
-          <div class="detail-block">
-            <h4>Symptoms entered</h4>
-            <div class="symptoms-box" id="result-syms">—</div>
-          </div>
-          <div class="detail-block">
-            <h4>Precautions</h4>
-            <ul class="prec-list" id="result-prec">
-              <li class="prec-item">Run the analysis to view recommendations.</li>
-            </ul>
-          </div>
+
+        <div class="insight-section">
+          <h4>Clinical insight</h4>
+          <p id="result-desc" style="margin-top:8px">
+            Run an analysis to view the clinical summary.
+          </p>
         </div>
+      </div>
+
+      <!-- Right: symptoms + precautions for primary disease -->
+      <div class="panel panel-soft">
+        <div class="detail-block">
+          <h4>Symptoms entered</h4>
+          <div class="symptoms-box" id="result-syms">—</div>
+        </div>
+        <div class="detail-block">
+          <h4>Precautions</h4>
+          <ul class="prec-list" id="result-prec">
+            <li class="prec-item">Run the analysis to view recommendations.</li>
+          </ul>
+        </div>
+      </div>
+
+    </div>
+    <!-- ── end primary result row ─────────────────────── -->
+
+    <!-- ── Top-3 differential diagnoses ──────────────── -->
+    <div class="top3-section">
+      <div class="top3-section-header">
+        <div class="top3-header-left">
+          <div class="top3-header-eyebrow">
+            <span class="top3-eyebrow-dot"></span>
+            <span>AI Analysis</span>
+          </div>
+          <h3 class="top3-heading">Differential Diagnoses</h3>
+          <p class="top3-subheading">
+            Top 3 most probable conditions ranked by likelihood from your symptom profile
+          </p>
+        </div>
+        <div class="top3-header-rule"></div>
+      </div>
+      <div class="top3-grid" id="result-top3-grid">
+        <!-- Populated by renderResult() in app.js -->
       </div>
     </div>
-  </section>
+    <!-- ── end top-3 ───────────────────────────────────── -->
+
+  </div>
+</section>
 
   <section id="view-analytics" class="view hidden">
     <div class="container">

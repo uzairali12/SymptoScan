@@ -5,11 +5,8 @@
 const getApiUrl = () => {
   if (window.API_URL) return window.API_URL;
 
-  if (window.location.hostname === "localhost") {
-    return "http://127.0.0.1:8000";
-  }
-
-  return "https://uzairq2qwq-symptoscan-backend.hf.space";
+  // FORCES all requests to the local Python backend
+  return "http://127.0.0.1:8000";
 };
 
 const API_URL = getApiUrl();
@@ -331,15 +328,16 @@ window.emailAuth = async function () {
       const { data, error } = await supabase.auth.signUp({
         email,
         password: pass,
-        options: { data: { full_name: name || "" } }
+        options: {
+          data: { full_name: name || "" },
+          // Dynamically set the redirect to the current domain
+          emailRedirectTo: `${window.location.origin}/` 
+        }
       });
       if (error) throw error;
       showAuthError("Check your email to confirm your account");
     } else {
-      const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
-      if (error) throw error;
-      if (data?.session && window.onAuthChange) await window.onAuthChange(data.session);
-      closeAuth();
+      // ... existing sign-in logic ...
     }
   } catch (err) {
     showAuthError(err.message);
@@ -552,41 +550,104 @@ window.analyzeSymptoms = async function () {
 };
 
 function renderResult(data) {
-  const disease = document.getElementById("result-disease");
-  const conf = document.getElementById("result-conf");
-  const fill = document.getElementById("conf-fill");
-  const desc = document.getElementById("result-desc");
-  const syms = document.getElementById("result-syms");
-  const prec = document.getElementById("result-prec");
-  const date = document.getElementById("result-date");
+  const disease     = document.getElementById("result-disease");
+  const conf        = document.getElementById("result-conf");
+  const fill        = document.getElementById("conf-fill");
+  const desc        = document.getElementById("result-desc");
+  const syms        = document.getElementById("result-syms");
+  const prec        = document.getElementById("result-prec");
+  const date        = document.getElementById("result-date");
+  const sevBadge    = document.getElementById("result-sev");
+  const top3Grid    = document.getElementById("result-top3-grid");
 
-  // Parse using cross-compatible logic
-  const rawScore = data.confidence;
-  const cleanScore = parseConfidence(rawScore);
-  const confidence = Math.min(100, Math.max(0, cleanScore));
+  const confidence = Math.min(100, Math.max(0, parseConfidence(data.confidence)));
 
   if (disease) disease.textContent = data.disease || data.prediction || "Unknown Condition";
-  if (conf) conf.textContent = confidence.toFixed(2) + "%";
-  if (fill) fill.style.width = confidence + "%";
-  if (desc) desc.textContent = data.description || "No description provided.";
-  if (syms) {
-    const symptomList = data.symptoms || data.symptoms_provided || [];
-    syms.textContent = symptomList.map(s => String(s).replace(/_/g, " ")).join(", ");
-  }
-  if (date) date.textContent = new Date().toLocaleString();
+  if (conf)    conf.textContent    = confidence.toFixed(2) + "%";
+  if (fill)    fill.style.width    = confidence + "%";
+  if (desc)    desc.textContent    = data.description || "No description provided.";
+  if (date)    date.textContent    = new Date().toLocaleString();
 
+  // Genuine risk badge — driven by backend value, with JS fallback
+  const risk = data.risk_level ||
+    (confidence >= 70 ? "High" : confidence >= 40 ? "Medium" : "Low");
+  if (sevBadge) {
+    sevBadge.textContent = `${risk} Risk`;
+    sevBadge.className   = `sev-badge sev-${risk.toLowerCase()}`;
+  }
+
+  // Symptoms
+  if (syms) {
+    const arr = data.symptoms || data.symptoms_provided || [];
+    syms.textContent = arr.map(s => String(s).replace(/_/g, " ")).join(", ") || "—";
+  }
+
+  // Primary precautions
   if (prec) {
     prec.innerHTML = "";
-    const precArray = Array.isArray(data.precautions) 
-      ? data.precautions 
+    const precArray = Array.isArray(data.precautions)
+      ? data.precautions
       : (typeof data.precautions === "string" ? data.precautions.split(",") : []);
-
     precArray.forEach(p => {
-      if (p && String(p).trim()) {
-        const li = document.createElement("li");
-        li.textContent = String(p).trim();
-        prec.appendChild(li);
-      }
+      if (!p || !String(p).trim()) return;
+      const li = document.createElement("li");
+      li.className = "prec-item";
+      li.textContent = String(p).trim();
+      prec.appendChild(li);
+    });
+  }
+
+  // Top-3 differential diagnoses — with descriptions + precautions per disease
+  if (top3Grid) {
+    top3Grid.innerHTML = "";
+    const top3 = Array.isArray(data.top3) ? data.top3 : [];
+
+    if (!top3.length) {
+      top3Grid.innerHTML = `<p style="color:var(--muted);font-size:.82rem;padding:8px">No differential diagnoses calculated.</p>`;
+      return;
+    }
+
+    const rankLabel = ["Primary", "Secondary", "Tertiary"];
+    const rankClass = ["top3-primary", "top3-secondary", "top3-tertiary"];
+
+    top3.forEach((item, i) => {
+      const itemConf = typeof item.probability === "number"
+        ? item.probability
+        : parseConfidence(item.confidence);
+      const itemRisk = item.risk ||
+        (itemConf >= 70 ? "High" : itemConf >= 40 ? "Medium" : "Low");
+      const itemName = String(item.disease || "").replace(/_/g, " ");
+      const itemDesc = item.description || "Clinical assessment based on provided symptoms.";
+      const itemPrecs = Array.isArray(item.precautions) ? item.precautions : [];
+
+      const card = document.createElement("div");
+      card.className = `top3-card ${rankClass[i] || "top3-tertiary"}`;
+      card.innerHTML = `
+        <div class="top3-header">
+          <div class="top3-header-top">
+            <span class="top3-rank-badge">${rankLabel[i] || `#${i + 1}`}</span>
+            <span class="top3-conf-val">${itemConf.toFixed(2)}%</span>
+          </div>
+          <div class="top3-disease-name">${itemName}</div>
+          <span class="sev-badge sev-${itemRisk.toLowerCase()}">${itemRisk} Risk</span>
+        </div>
+        <div class="conf-track" style="margin:2px 0 10px">
+          <div class="top3-fill-${itemRisk.toLowerCase()}" style="height:100%;width:${itemConf}%;border-radius:999px;transition:width .9s cubic-bezier(.16,1,.3,1)"></div>
+        </div>
+        <div class="top3-body">
+          <div class="top3-desc-block">
+            <span class="top3-label">Clinical Insight</span>
+            <p class="top3-desc-text">${itemDesc}</p>
+          </div>
+          ${itemPrecs.length ? `
+          <div class="top3-prec-block">
+            <span class="top3-label">Precautions</span>
+            <ul class="top3-prec-list">
+              ${itemPrecs.map(p => `<li>${String(p).trim()}</li>`).join("")}
+            </ul>
+          </div>` : ""}
+        </div>`;
+      top3Grid.appendChild(card);
     });
   }
 }
@@ -643,6 +704,9 @@ async function loadHistory() {
         const confidenceDisplay = cleanScore.toFixed(2);
         const diseaseName = h.prediction || h.disease || "Unknown Profile";
 
+        const histRisk = h.risk_level ||
+          (cleanScore >= 70 ? "High" : cleanScore >= 40 ? "Medium" : "Low");
+
         return `
           <div class="hist-item" data-idx="${idx}">
             <div class="hist-header" onclick="toggleHistItem(${idx})">
@@ -652,6 +716,7 @@ async function loadHistory() {
               </div>
               <div class="hist-side">
                 <span class="hist-date">${new Date(h.analyzed_at || h.created_at || Date.now()).toLocaleString()}</span>
+                <span class="sev-badge sev-${histRisk.toLowerCase()}" style="font-size:.65rem">${histRisk}</span>
                 <span class="hist-conf">${confidenceDisplay}%</span>
                 <button class="hist-delete-btn" onclick="deleteHistItem(${idx}, event)" aria-label="Delete Entry">
                   <i class="ti ti-trash"></i>
@@ -663,19 +728,28 @@ async function loadHistory() {
             </div>
             <div class="hist-details hidden">
               <div class="hist-content">
-                <div class="hist-block">
-                  <strong>Condition Analysis Summary</strong>
-                  <p class="hist-description-detailed mt-1 text-slate-300">${h.description || "No deep condition clinical description saved."}</p>
-                </div>
-                <div class="hist-block">
-                  <strong>Symptoms Evaluated</strong>
-                  <p class="hist-symptoms-detailed mt-1 text-teal-400">${symptomsText}</p>
-                </div>
-                <div class="hist-block">
+               <div class="hist-block">
                   <strong>Recommended Precautions</strong>
                   <ul class="hist-precautions-list mt-1 list-disc pl-4 text-slate-300">${precautionsHtml || `<li>No medical steps recorded</li>`}</ul>
                 </div>
               </div>
+              ${(() => {
+                const tp = Array.isArray(h.top_predictions) && h.top_predictions.length > 0 ? h.top_predictions : null;
+                if (!tp) return "";
+                return `
+                <div class="hist-block" style="margin-top:16px;padding-top:16px;border-top:1px solid rgba(255,255,255,.05)">
+                  <strong>Differential Diagnoses</strong>
+                  <div class="hist-top3-mini">
+                    ${tp.map((p, pi) => `
+                      <div class="hist-top3-item">
+                        <span class="hist-top3-rank">${["1st","2nd","3rd"][pi] || `#${pi+1}`}</span>
+                        <span class="hist-top3-disease">${String(p.disease || "").replace(/_/g," ")}</span>
+                        <span class="sev-badge sev-${(p.risk || "low").toLowerCase()}" style="font-size:.6rem">${p.risk || "Low"} Risk</span>
+                        <span class="hist-top3-conf">${typeof p.probability === "number" ? p.probability.toFixed(1)+"%" : (p.confidence || "—")}</span>
+                      </div>`).join("")}
+                  </div>
+                </div>`;
+              })()}
             </div>
           </div>`;
       })
@@ -711,8 +785,9 @@ async function loadAnalytics() {
     const avg = document.getElementById("an-conf");
 
     if (total) total.textContent = h.length;
-    if (risk) risk.textContent = h.filter(x => parseConfidence(x.confidence) >= 85.00).length;
-
+    if (risk) risk.textContent = h.filter(x =>
+      (x.risk_level === "High") || parseConfidence(x.confidence) >= 70.0
+    ).length;
     const avgVal = h.reduce((sum, row) => sum + parseConfidence(row.confidence), 0) / (h.length || 1);
     if (avg) avg.textContent = h.length ? avgVal.toFixed(2) + "%" : "0.00%";
   } catch(err) {

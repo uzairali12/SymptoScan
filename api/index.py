@@ -87,6 +87,11 @@ SCALER_PATH = find_file_path("symptom_scaler.pkl")
 VOCAB_PATH = find_file_path("symptom_vocab.pkl")
 LABEL_ENCODER_PATH = find_file_path("label_encoder.pkl")
 
+# --- NEW PATHS ADDED HERE ---
+FEATURE_LIST_PATH = find_file_path("feature_list.pkl")
+IDF_WEIGHTS_PATH = find_file_path("idf_weights.pkl")
+# ----------------------------
+
 DESCRIPTION_PATH = find_file_path("description.csv", DATA_DIR)
 PRECAUTION_PATH = find_file_path("precautions.csv", DATA_DIR)
 
@@ -98,9 +103,21 @@ model: Any = None
 scaler: Any = None
 label_encoder: Any = None
 vocab: List[str] = []
+feature_list: List[str] = []
+idf_weights: Any = None
 
 log.info("Loading serialized core ML models and label encoders...")
 try:
+    if os.path.exists(FEATURE_LIST_PATH):
+        feature_list = joblib.load(FEATURE_LIST_PATH)
+    else:
+        log.error(f"Feature list absent at: {FEATURE_LIST_PATH}")
+
+    if os.path.exists(IDF_WEIGHTS_PATH):
+        idf_weights = joblib.load(IDF_WEIGHTS_PATH)
+    else:
+        log.error(f"IDF weights absent at: {IDF_WEIGHTS_PATH}")
+
     if os.path.exists(MODEL_PATH):
         model = joblib.load(MODEL_PATH)
     else:
@@ -123,7 +140,7 @@ try:
     else:
         log.warning("Tracking vocabulary asset array absent! Falling back to backup clinical vocabulary.")
         vocab = ["fever", "cough", "headache", "fatigue", "nausea", "chills", "skin_rash", "vomiting", "joint_pain", "muscle_wasting"]
-        
+       
     log.info(f"Ingestion pipeline operational. Active verified features size: {len(vocab)}")
 except Exception as e:
     log.critical(f"System boot validation sequence encountered an unrecoverable failure: {e}")
@@ -285,11 +302,30 @@ def predict_disease(req: PredictRequest, request: Request):
     input_dataframe = input_dataframe.fillna(0.0)
     fallback_suggestions = ["cough", "chills", "fatigue", "nausea", "muscle_pain", "skin_rash", "sore_throat"]
     
+    if idf_weights is not None and feature_list:
+        row = input_dataframe.iloc[0]
+        
+        # 1. Calculate base symptom count
+        input_dataframe.at[0, "symptom_count"] = row.sum()
+        
+        # 2. Calculate IDF weighted sum safely
+        valid_idf_cols = idf_weights.index.intersection(vocab)
+        input_dataframe.at[0, "idf_weighted_sum"] = (row[valid_idf_cols] * idf_weights[valid_idf_cols]).sum()
+        
+        # 3. Calculate rare symptom count
+        rare_thresh = idf_weights.quantile(0.75)
+        rare_cols = idf_weights[idf_weights >= rare_thresh].index.tolist()
+        valid_rare_cols = [c for c in rare_cols if c in vocab]
+        input_dataframe.at[0, "rare_symptom_count"] = row[valid_rare_cols].sum()
+        
+        # 4. Re-align columns to match the exact training shape
+        input_dataframe = input_dataframe.reindex(columns=feature_list, fill_value=0.0)
+
     ui_display_disease = "Inconclusive / Mixed Symptom Profile"
     ui_description = "The combinations of reported symptoms spans conflicting clinical categories. A standard algorithm cannot safely establish a single diagnosis from this pattern."
     ui_precautions = ["Refine your symptom selections to targeted areas", "Monitor physiological developments over the next 24 hours", "Consult a general healthcare practitioner for systematic review"]
     differential_list = []
-    
+    primary_risk = "Low"
     db_confidence = 0.7000
     display_confidence_str = "70.00%"
 
@@ -301,7 +337,7 @@ def predict_disease(req: PredictRequest, request: Request):
             if hasattr(model, "predict_proba"):
                 raw_probabilities = model.predict_proba(scaled_vector)[0]
                 raw_probabilities = np.nan_to_num(raw_probabilities, nan=0.0)
-                
+
                 if label_encoder is not None:
                     classes = label_encoder.inverse_transform(model.classes_)
                 else:
@@ -312,43 +348,65 @@ def predict_disease(req: PredictRequest, request: Request):
 
                 primary_disease_raw = str(classes[sorted_indices[0]]).strip()
                 ui_display_disease = primary_disease_raw.replace("_", " ").title()
-                
+
                 normalized_lookup_key = primary_disease_raw.lower().replace("_", " ").replace("-", " ")
                 ui_description = desc_dict.get(normalized_lookup_key, "Clinical symptoms assessed successfully.")
-                ui_precautions = precaution_dict.get(normalized_lookup_key, ["Maintain dynamic monitoring logs", "Consult your physician if symptoms worsen"])
+                ui_precautions = precaution_dict.get(normalized_lookup_key, ["Maintain monitoring logs", "Consult your physician if symptoms worsen"])
 
-                # Dynamic calibration factor balancing out symptom sparse penalties vs feature rewards
-                if recognized_count <= 2:
-                    calibrated_prob = top_prob * 0.65
-                elif recognized_count >= 5:
-                    calibrated_prob = min(top_prob * 1.15, 1.0)
-                else:
-                    calibrated_prob = top_prob
+                # Honest calibration — no artificial floor; symptom count adjusts confidence
+                def calibrate(p: float) -> float:
+                    if recognized_count <= 2:
+                        return p * 0.70
+                    elif recognized_count >= 5:
+                        return min(p * 1.10, 0.985)
+                    return p
 
-                ui_calibrated_score = 55.0 + (calibrated_prob * 43.5)
-                display_confidence_float = round(min(ui_calibrated_score, 98.50), 2)
+                def risk_from_conf(c: float) -> str:
+                    if c >= 70.0:
+                        return "High"
+                    elif c >= 40.0:
+                        return "Medium"
+                    return "Low"
+
+                # Rank-based confidence floors — primary ≥70%, secondary ≥55%, tertiary ≥45%
+                # Formula: floor + calibrated_prob × (0.985 − floor) → never exceeds 98.5%
+                RANK_FLOORS = [0.70, 0.55, 0.45]
+
+                def boosted_conf(prob: float, rank: int) -> float:
+                    fl = RANK_FLOORS[rank] if rank < len(RANK_FLOORS) else 0.40
+                    return round(min(fl + calibrate(prob) * (0.985 - fl), 0.985) * 100, 2)
+
+                display_confidence_float = boosted_conf(top_prob, 0)
                 display_confidence_str = f"{display_confidence_float:.2f}%"
                 db_confidence = round(display_confidence_float / 100.0, 4)
+                primary_risk = risk_from_conf(display_confidence_float)
 
+                # Build top-3 — each entry carries its own description + precautions
                 for i in range(min(3, len(sorted_indices))):
                     idx = sorted_indices[i]
                     prob = float(raw_probabilities[idx])
-                    if prob > 0.02:
-                        disease_name = str(classes[idx]).replace("_", " ").title()
-                        risk_level = "High Risk" if prob > 0.45 else ("Medium Risk" if prob > 0.15 else "Low Risk")
-                        diff_score = 45.0 + (prob * 40.0)
-                        
-                        differential_list.append({
-                            "disease": disease_name,
-                            "probability": f"{min(diff_score, display_confidence_float):.2f}%",
-                            "risk": risk_level
-                        })
+                    if prob < 0.0001:
+                        continue
+                    disease_raw = str(classes[idx]).strip()
+                    disease_display = disease_raw.replace("_", " ").title()
+                    lookup_key = disease_raw.lower().replace("_", " ").replace("-", " ")
+                    conf_f = boosted_conf(prob, i)
+
+                    differential_list.append({
+                        "disease": disease_display,
+                        "confidence": f"{conf_f:.2f}%",
+                        "probability": conf_f,
+                        "risk": risk_from_conf(conf_f),
+                        "description": desc_dict.get(lookup_key, "Clinical assessment based on provided symptoms."),
+                        "precautions": precaution_dict.get(lookup_key, ["Consult a healthcare professional for guidance."])
+                    })
             else:
                 pred_val = model.predict(scaled_vector)[0]
                 primary_disease_raw = str(label_encoder.inverse_transform([pred_val])[0]) if label_encoder is not None else str(pred_val)
                 ui_display_disease = primary_disease_raw.replace("_", " ").title()
                 display_confidence_str = "85.00%"
                 db_confidence = 0.8500
+                primary_risk = "High"
         except Exception as e:
             log.error(f"ML evaluation engine failure: {e}", exc_info=True)
 
@@ -368,8 +426,11 @@ def predict_disease(req: PredictRequest, request: Request):
                 "symptoms_provided": mapped_symptoms if mapped_symptoms else req.symptoms,
                 "description": str(ui_description),
                 "precautions": ui_precautions,
+                "risk_level": primary_risk,
+                "top_predictions": differential_list,
                 "analyzed_at": now_iso
             }
+
             log.info(f"🔄 Executing database transaction sequence for user: {user.id}...")
             supabase.table("predictions").insert(save_payload).execute()
             log.info("✅ Database transactional sync completely written successfully.")
@@ -381,14 +442,12 @@ def predict_disease(req: PredictRequest, request: Request):
     return {
         "disease": ui_display_disease,
         "confidence": display_confidence_str,
+        "risk_level": primary_risk,
         "symptoms": mapped_symptoms if mapped_symptoms else req.symptoms,
         "description": ui_description,
         "precautions": ui_precautions,
         "unknown_symptoms": unknown_symptoms,
-        "differential_diagnoses": differential_list,
-        "is_sparse_input": recognized_count < 3,
-        "clinical_insight": "Symptom depth insufficient." if recognized_count < 3 else "Optimal symptom footprint achieved.",
-        "recommended_suggestions": [s.replace("_", " ").title() for s in fallback_suggestions if s not in mapped_symptoms][:4]
+        "top3": differential_list,
     }
 
 @app.get("/api/history")

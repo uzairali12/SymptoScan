@@ -1148,7 +1148,271 @@ p {
   flex-shrink: 0;
   margin-top: 2px;
 }
+/* ================================================================
+   12b. TOP-3 DIFFERENTIAL DIAGNOSES
+   ================================================================ */
 
+.top3-section {
+  margin-top: 24px;
+}
+
+.top3-section-header {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  align-items: center;
+  gap: 24px;
+  margin-bottom: 20px;
+  padding: 22px 0 18px;
+  border-top: 1px solid var(--b1);
+}
+
+.top3-header-left {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.top3-header-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: .68rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .12em;
+  color: var(--ac-text);
+}
+
+.top3-eyebrow-dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse 2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+
+/* Override global h4 defaults for this heading */
+.top3-heading {
+  font-family: var(--fd);
+  font-size: clamp(1.25rem, 3vw, 1.7rem);
+  font-weight: 600;
+  color: var(--text);
+  text-transform: none;
+  letter-spacing: -.01em;
+  line-height: 1.15;
+}
+
+.top3-subheading {
+  font-size: .80rem;
+  color: var(--muted);
+  margin: 0;
+  line-height: 1.55;
+  max-width: 360px;
+}
+
+/* Decorative horizontal rule that fills remaining space */
+.top3-header-rule {
+  height: 1px;
+  background: linear-gradient(90deg, var(--b2), transparent);
+  border-radius: 1px;
+}
+
+/* Mobile: stack rule below text, hide it to save space */
+@media (max-width: 600px) {
+  .top3-section-header {
+    grid-template-columns: 1fr;
+    gap: 0;
+    padding: 18px 0 14px;
+  }
+
+  .top3-header-rule {
+    display: none;
+  }
+
+  .top3-subheading {
+    max-width: 100%;
+  }
+}
+
+/* Three-column grid, collapses to 1 on mobile */
+.top3-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 14px;
+  align-items: start;
+}
+
+/* ── Card base ─────────────────────────────────────── */
+.top3-card {
+  background: var(--s1);
+  border: 1px solid var(--b1);
+  border-radius: var(--r3);
+  padding: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  transition: border-color var(--std) var(--ease), transform var(--std) var(--ease);
+}
+
+.top3-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--b2);
+}
+
+/* Rank-specific card skins */
+.top3-primary {
+  border-color: rgba(45, 212, 191, .22);
+  background: linear-gradient(140deg, var(--s1) 70%, rgba(45, 212, 191, .04));
+  box-shadow: 0 0 28px rgba(45, 212, 191, .04);
+}
+
+.top3-secondary {
+  border-color: rgba(96, 165, 250, .16);
+}
+
+.top3-tertiary {
+  border-color: var(--b1);
+}
+
+/* ── Card header row ───────────────────────────────── */
+/* Header is now a column — no more cramming in one line */
+.top3-header {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+/* Top micro-row: rank badge left, confidence right */
+.top3-header-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.top3-rank-badge {
+  font-family: var(--fm);
+  font-size: .60rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .10em;
+  color: var(--muted);
+  background: rgba(255, 255, 255, .04);
+  border: 1px solid var(--b1);
+  padding: 2px 8px;
+  border-radius: 4px;
+  flex-shrink: 0;
+}
+
+.top3-primary .top3-rank-badge {
+  color: var(--ac-text);
+  background: var(--ac-dim);
+  border-color: rgba(45, 212, 191, .22);
+}
+
+/* Disease name gets its own full-width row — no overflow possible */
+.top3-disease-name {
+  font-family: var(--fd);
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: var(--text);
+  line-height: 1.2;
+  word-break: break-word;
+}
+
+.top3-conf-val {
+  font-family: var(--fm);
+  font-size: .92rem;
+  font-weight: 700;
+  color: var(--ac-text);
+  flex-shrink: 0;
+}
+
+/* ── Progress bar fill colors by risk ─────────────── */
+.top3-fill-high {
+  background: linear-gradient(90deg, var(--err), #fca5a5);
+  box-shadow: 0 0 6px rgba(248, 113, 113, .35);
+}
+
+.top3-fill-medium {
+  background: linear-gradient(90deg, var(--warn), #fdba74);
+  box-shadow: 0 0 6px rgba(251, 146, 60, .30);
+}
+
+.top3-fill-low {
+  background: linear-gradient(90deg, var(--ok), #86efac);
+  box-shadow: 0 0 6px rgba(74, 222, 128, .30);
+}
+
+/* ── Card body ─────────────────────────────────────── */
+.top3-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 4px;
+}
+
+.top3-label {
+  display: block;
+  font-size: .65rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: .10em;
+  color: var(--muted);
+  margin-bottom: 5px;
+}
+
+.top3-desc-block,
+.top3-prec-block {
+  display: flex;
+  flex-direction: column;
+}
+
+.top3-desc-text {
+  font-size: .81rem;
+  color: var(--dim);
+  line-height: 1.65;
+  margin: 0;
+}
+
+/* Precautions list */
+.top3-prec-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.top3-prec-list li {
+  position: relative;
+  padding: 5px 9px 5px 18px;
+  font-size: .79rem;
+  color: var(--dim);
+  background: rgba(255, 255, 255, .02);
+  border: 1px solid var(--b1);
+  border-radius: var(--r1);
+  line-height: 1.45;
+}
+
+.top3-prec-list li::before {
+  content: '—';
+  position: absolute;
+  left: 6px;
+  top: 5px;
+  color: var(--accent);
+  font-family: var(--fm);
+  font-size: .68rem;
+}
+
+/* ── Responsive ────────────────────────────────────── */
+@media (max-width: 820px) {
+  .top3-grid {
+    grid-template-columns: 1fr;
+  }
+}
 
 /* ================================================================
    13. ANALYTICS VIEW
@@ -1484,6 +1748,51 @@ p {
   line-height: 1.55;
 }
 
+/* ================================================================
+   14b. HISTORY — MINI TOP-3 INSIDE EXPANDED CARD
+   ================================================================ */
+.hist-top3-mini {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 6px;
+}
+
+.hist-top3-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  background: rgba(255, 255, 255, .02);
+  border: 1px solid var(--b1);
+  border-radius: var(--r1);
+}
+
+.hist-top3-rank {
+  font-family: var(--fm);
+  font-size: .65rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: .06em;
+  width: 26px;
+  flex-shrink: 0;
+}
+
+.hist-top3-disease {
+  flex: 1;
+  color: var(--text);
+  font-size: .84rem;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.hist-top3-conf {
+  font-family: var(--fm);
+  font-size: .82rem;
+  color: var(--ac-text);
+  font-weight: 700;
+  flex-shrink: 0;
+}
 
 /* ================================================================
    15. PROFILE VIEW
@@ -1986,3 +2295,4 @@ p {
   }
 
 }
+
