@@ -8,16 +8,26 @@
 
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,400;0,600;1,400;1,600&family=Figtree:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;500;600;700;800&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.7.0/dist/tabler-icons.min.css">
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Syne:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="css/style.css">
+  
   <script src="./js/env.js" defer></script>
   <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.34.0/dist/umd/supabase.min.js" defer></script>
   <script src="./js/app.js" defer></script>
-
 </head>
 <body>
 
+<!-- ══ AMBIENT BACKGROUND CANVAS ══════════════════════════════════════ -->
+<div class="bg-canvas" aria-hidden="true">
+  <div class="bg-orb orb-violet"></div>
+  <div class="bg-orb orb-cyan"></div>
+  <div class="bg-orb orb-mid"></div>
+  <div class="bg-grid"></div>
+</div>
+
+<!-- ══ NAVIGATION ═════════════════════════════════════════════════════ -->
 <nav class="navbar">
   <div class="container navbar-inner">
     <a href="#" class="brand" onclick="go('landing');return false;">
@@ -54,196 +64,291 @@
 
 <main>
 
+  <!-- ══ LANDING / HERO ═════════════════════════════════════════════ -->
   <section id="view-landing" class="view view-hero">
-    <div class="container hero-grid">
-      <div class="hero-copy">
-        <span class="eyebrow"><span class="eyebrow-dot"></span>AI diagnostic system</span>
-        <h1>Detect likely diseases from <em>symptoms</em> instantly.</h1>
-        <p>SymptoScan delivers real-time symptom analysis, confidence scoring, and full session history so you can make faster, better-informed health decisions.</p>
-        <div class="hero-actions">
-          <button class="btn btn-primary btn-xl" onclick="go('dashboard')"><i class="ti ti-stethoscope"></i> Start Diagnosis</button>
-          <button class="btn btn-secondary btn-xl" onclick="openAuth()">Create Account</button>
+    <div class="container">
+
+      <!-- Hero split: copy left, scanner right -->
+      <div class="hero-grid">
+
+        <!-- Left: copy block -->
+        <div class="hero-copy">
+          <span class="eyebrow"><span class="eyebrow-dot"></span>AI diagnostic system</span>
+          <h1>Detect likely <em>diseases</em> from symptoms<span class="h1-coda"> instantly.</span></h1>
+          <p class="hero-desc">SymptoScan delivers real-time symptom analysis, confidence scoring, and full session history — so you can make faster, better-informed health decisions.</p>
+          <div class="hero-actions">
+            <button class="btn btn-primary btn-xl" onclick="go('dashboard')"><i class="ti ti-stethoscope"></i> Start Diagnosis</button>
+            <button class="btn btn-outline btn-xl" onclick="openAuth()">Create Account</button>
+          </div>
+          <div class="hero-stats">
+            <div class="stat-item"><strong>10K+</strong><span>Cases analysed</span></div>
+            <div class="stat-sep"></div>
+            <div class="stat-item"><strong>87%</strong><span>Avg confidence</span></div>
+            <div class="stat-sep"></div>
+            <div class="stat-item"><strong>&lt;2s</strong><span>Response time</span></div>
+          </div>
         </div>
-        <div class="hero-stats">
-          <div class="stat-item"><strong>10K+</strong><span>Cases analysed</span></div>
-          <div class="stat-sep"></div>
-          <div class="stat-item"><strong>87%</strong><span>Avg confidence</span></div>
-          <div class="stat-sep"></div>
-          <div class="stat-item"><strong>&lt;2s</strong><span>Response time</span></div>
+
+        <!-- Right: signature scanner visualization -->
+        <div class="hero-visual" aria-hidden="true">
+          <div class="scanner-wrap">
+            <!-- Concentric rings -->
+            <div class="s-ring sr-outer"></div>
+            <div class="s-ring sr-mid"></div>
+            <div class="s-ring sr-inner"></div>
+            <!-- Conic sweep layer -->
+            <div class="s-sweep"></div>
+            <!-- Rotating arm -->
+            <div class="s-arm-wrap">
+              <div class="s-arm-line"></div>
+            </div>
+            <!-- Center core -->
+            <div class="s-core">
+              <div class="s-core-glow"></div>
+              <i class="ti ti-brain s-core-icon"></i>
+            </div>
+            <!-- Orbital data nodes -->
+            <span class="s-node sn-1"></span>
+            <span class="s-node sn-2"></span>
+            <span class="s-node sn-3"></span>
+            <span class="s-node sn-4"></span>
+            <span class="s-node sn-5"></span>
+            <span class="s-node sn-6"></span>
+            <!-- Dashed radial lines -->
+            <div class="s-cross-h"></div>
+            <div class="s-cross-v"></div>
+          </div>
+
+          <!-- Floating stat chips -->
+          <div class="hero-chip hc-top">
+            <i class="ti ti-chart-bar hc-icon" style="color:var(--ac-text)"></i>
+            <div>
+              <span class="hc-label">Accuracy</span>
+              <span class="hc-val">97.8%</span>
+            </div>
+          </div>
+          <div class="hero-chip hc-left">
+            <i class="ti ti-database hc-icon" style="color:var(--ac2-text)"></i>
+            <div>
+              <span class="hc-label">Disease DB</span>
+              <span class="hc-val">41 types</span>
+            </div>
+          </div>
+          <div class="hero-chip hc-bottom">
+            <i class="ti ti-bolt hc-icon" style="color:#34D399"></i>
+            <div>
+              <span class="hc-label">Response</span>
+              <span class="hc-val">&lt; 2 sec</span>
+            </div>
+          </div>
+        </div>
+
+      </div><!-- /hero-grid -->
+
+      <!-- Feature cards row below hero -->
+      <div class="feature-row">
+        <div class="feat-card">
+          <div class="feat-icon feat-icon-cyan"><i class="ti ti-brain"></i></div>
+          <div class="feat-body">
+            <h3>Smart symptom parsing</h3>
+            <p>Select from 132 clinical terms — the AI engine handles interpretation and maps to disease profiles automatically.</p>
+          </div>
+        </div>
+        <div class="feat-card">
+          <div class="feat-icon feat-icon-violet"><i class="ti ti-chart-bar"></i></div>
+          <div class="feat-body">
+            <h3>Confidence-scored results</h3>
+            <p>Every diagnosis returns a confidence percentage, severity rating, differential diagnoses, and actionable precautions.</p>
+          </div>
+        </div>
+        <div class="feat-card">
+          <div class="feat-icon feat-icon-green"><i class="ti ti-shield-check"></i></div>
+          <div class="feat-body">
+            <h3>Secure &amp; private</h3>
+            <p>Sign in to save your full session history, track personal health trends, and access analytics over time.</p>
+          </div>
         </div>
       </div>
-      <div class="feature-stack">
-        <div class="feat-card">
-          <div class="feat-icon"><i class="ti ti-brain"></i></div>
-          <div><h3>Smart symptom parsing</h3><p>Write symptoms in plain language — the AI handles clinical interpretation automatically.</p></div>
-        </div>
-        <div class="feat-card">
-          <div class="feat-icon"><i class="ti ti-chart-bar"></i></div>
-          <div><h3>Confidence-scored results</h3><p>Every diagnosis includes a confidence percentage, severity rating, and actionable precautions.</p></div>
-        </div>
-        <div class="feat-card">
-          <div class="feat-icon"><i class="ti ti-shield-check"></i></div>
-          <div><h3>Secure &amp; private</h3><p>Sign in to save history, track analytics, and access personalised health summaries.</p></div>
-        </div>
-      </div>
+
     </div>
   </section>
 
+  <!-- ══ DASHBOARD VIEW ════════════════════════════════════════════ -->
   <section id="view-dashboard" class="view hidden">
     <div class="container">
       <div class="section-header">
-        <div><span class="section-label">Symptom Checker</span><h2>Describe your symptoms</h2></div>
+        <div>
+          <span class="section-label">Symptom Checker</span>
+          <h2>Describe your <em>symptoms</em></h2>
+        </div>
         <button class="btn btn-ghost btn-sm" onclick="go('landing')"><i class="ti ti-home"></i> Home</button>
       </div>
       <div class="dash-grid">
         <div class="panel panel-glass">
           <label class="form-label" for="symptom-search-input">Symptoms Matrix</label>
-          
+
           <div class="combobox-container">
-            
             <div class="selected-chips-area" id="selected-tags-container"></div>
-            
             <div class="combobox-wrapper">
               <div class="input-with-icon">
                 <i class="ti ti-search search-field-icon"></i>
-                <input type="text" id="symptom-search-input" class="form-input combobox-input" placeholder="Search symptoms (e.g., high fever, muscle pain, cough)..." autocomplete="off">
+                <input type="text" id="symptom-search-input" class="form-input combobox-input"
+                  placeholder="Search symptoms (e.g., high fever, muscle pain, cough)…"
+                  autocomplete="off">
               </div>
-              
-              <div class="symptom-dropdown-menu hidden" id="symptom-dropdown">
-                </div>
+              <div class="symptom-dropdown-menu hidden" id="symptom-dropdown"></div>
             </div>
           </div>
 
           <div class="panel-foot">
-            <span class="hint"><i class="ti ti-info-circle"></i> Search and select items from our clinical database vocabulary for absolute precision.</span>
+            <span class="hint"><i class="ti ti-info-circle"></i> Select from our clinical vocabulary for precise analysis.</span>
             <button class="btn btn-primary btn-lg" onclick="analyzeSymptoms()"><i class="ti ti-stethoscope"></i> Analyze Symptoms</button>
           </div>
         </div>
+
         <div class="panel panel-soft">
           <h4>How it works</h4>
           <ul class="how-list">
-            <li class="how-item"><i class="ti ti-number-1"></i> Search and choose clinical terms</li>
-            <li class="how-item"><i class="ti ti-number-2"></i> Selected symptoms map to custom severities</li>
-            <li class="how-item"><i class="ti ti-number-3"></i> Core engine returns metrics and warnings</li>
-            <li class="how-item"><i class="ti ti-shield-lock"></i> Session profiles write straight to Supabase</li>
+            <li class="how-item">
+              <span class="how-num">01</span>
+              <span>Search and select clinical terms from our curated vocabulary</span>
+            </li>
+            <li class="how-item">
+              <span class="how-num">02</span>
+              <span>Selected symptoms are mapped to clinical severity levels</span>
+            </li>
+            <li class="how-item">
+              <span class="how-num">03</span>
+              <span>ML engine returns confidence scores, risk levels &amp; precautions</span>
+            </li>
+            <li class="how-item how-item-secure">
+              <span class="how-num how-num-lock"><i class="ti ti-shield-lock"></i></span>
+              <span>Session profiles are written securely to your Supabase account</span>
+            </li>
           </ul>
         </div>
       </div>
     </div>
   </section>
 
+  <!-- ══ RESULT VIEW ════════════════════════════════════════════════ -->
   <section id="view-result" class="view hidden">
-  <div class="container">
+    <div class="container">
 
-    <div class="section-header">
-      <div>
-        <span class="section-label">Diagnosis Result</span>
-        <h2>Review your analysis</h2>
+      <div class="section-header">
+        <div>
+          <span class="section-label">Diagnosis Result</span>
+          <h2>Review your <em>analysis</em></h2>
+        </div>
+        <button class="btn btn-ghost btn-sm" onclick="go('dashboard')">
+          <i class="ti ti-refresh"></i> New check
+        </button>
       </div>
-      <button class="btn btn-ghost btn-sm" onclick="go('dashboard')">
-        <i class="ti ti-refresh"></i> New check
-      </button>
+
+      <!-- Primary result row -->
+      <div class="result-grid">
+        <div class="panel panel-glow">
+          <div class="result-top">
+            <div>
+              <div class="disease-name" id="result-disease">—</div>
+              <div class="result-date" id="result-date"></div>
+            </div>
+            <span class="sev-badge sev-medium" id="result-sev">Medium Risk</span>
+          </div>
+
+          <div class="conf-block">
+            <div class="conf-row">
+              <span class="conf-label">Confidence score</span>
+              <span class="conf-value" id="result-conf">—</span>
+            </div>
+            <div class="conf-track">
+              <div class="conf-fill" id="conf-fill"></div>
+            </div>
+          </div>
+
+          <div class="insight-section">
+            <h4>Clinical insight</h4>
+            <p id="result-desc" style="margin-top:8px">Run an analysis to view the clinical summary.</p>
+          </div>
+        </div>
+
+        <div class="panel panel-soft">
+          <div class="detail-block">
+            <h4>Symptoms entered</h4>
+            <div class="symptoms-box" id="result-syms">—</div>
+          </div>
+          <div class="detail-block">
+            <h4>Precautions</h4>
+            <ul class="prec-list" id="result-prec">
+              <li class="prec-item">Run the analysis to view recommendations.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+
+      <!-- Top-3 differential diagnoses -->
+      <div class="top3-section">
+        <div class="top3-section-header">
+          <div class="top3-header-left">
+            <div class="top3-header-eyebrow">
+              <span class="top3-eyebrow-dot"></span>
+              <span>AI Analysis</span>
+            </div>
+            <h3 class="top3-heading">Differential Diagnoses</h3>
+            <p class="top3-subheading">Top 3 most probable conditions ranked by likelihood from your symptom profile</p>
+          </div>
+          <div class="top3-header-rule"></div>
+        </div>
+        <div class="top3-grid" id="result-top3-grid">
+          <!-- Populated by renderResult() in app.js -->
+        </div>
+      </div>
+
     </div>
+  </section>
 
-    <!-- ── Primary result row ─────────────────────────── -->
-    <div class="result-grid">
-
-      <!-- Left: disease + confidence + description -->
-      <div class="panel panel-glow">
-        <div class="result-top">
-          <div>
-            <div class="disease-name" id="result-disease">—</div>
-            <div class="result-date"  id="result-date"></div>
-          </div>
-          <span class="sev-badge sev-medium" id="result-sev">Medium Risk</span>
-        </div>
-
-        <div class="conf-block">
-          <div class="conf-row">
-            <span class="conf-label">Confidence score</span>
-            <span class="conf-value" id="result-conf">—</span>
-          </div>
-          <div class="conf-track">
-            <div class="conf-fill" id="conf-fill"></div>
-          </div>
-        </div>
-
-        <div class="insight-section">
-          <h4>Clinical insight</h4>
-          <p id="result-desc" style="margin-top:8px">
-            Run an analysis to view the clinical summary.
-          </p>
-        </div>
-      </div>
-
-      <!-- Right: symptoms + precautions for primary disease -->
-      <div class="panel panel-soft">
-        <div class="detail-block">
-          <h4>Symptoms entered</h4>
-          <div class="symptoms-box" id="result-syms">—</div>
-        </div>
-        <div class="detail-block">
-          <h4>Precautions</h4>
-          <ul class="prec-list" id="result-prec">
-            <li class="prec-item">Run the analysis to view recommendations.</li>
-          </ul>
-        </div>
-      </div>
-
-    </div>
-    <!-- ── end primary result row ─────────────────────── -->
-
-    <!-- ── Top-3 differential diagnoses ──────────────── -->
-    <div class="top3-section">
-      <div class="top3-section-header">
-        <div class="top3-header-left">
-          <div class="top3-header-eyebrow">
-            <span class="top3-eyebrow-dot"></span>
-            <span>AI Analysis</span>
-          </div>
-          <h3 class="top3-heading">Differential Diagnoses</h3>
-          <p class="top3-subheading">
-            Top 3 most probable conditions ranked by likelihood from your symptom profile
-          </p>
-        </div>
-        <div class="top3-header-rule"></div>
-      </div>
-      <div class="top3-grid" id="result-top3-grid">
-        <!-- Populated by renderResult() in app.js -->
-      </div>
-    </div>
-    <!-- ── end top-3 ───────────────────────────────────── -->
-
-  </div>
-</section>
-
+  <!-- ══ ANALYTICS VIEW ════════════════════════════════════════════ -->
   <section id="view-analytics" class="view hidden">
     <div class="container">
       <div class="section-header">
-        <div><span class="section-label">Analytics</span><h2>Your health trends</h2></div>
+        <div><span class="section-label">Analytics</span><h2>Your health <em>trends</em></h2></div>
         <button class="btn btn-ghost btn-sm" onclick="go('dashboard')"><i class="ti ti-plus"></i> New analysis</button>
       </div>
       <div class="stats-row">
-        <div class="stat-block"><div class="stat-block-label">Total diagnoses</div><div class="stat-block-val" id="an-total">0</div></div>
-        <div class="stat-block"><div class="stat-block-label">High-risk cases</div><div class="stat-block-val" id="an-risk">0</div></div>
-        <div class="stat-block"><div class="stat-block-label">Avg confidence</div><div class="stat-block-val" id="an-conf">—</div></div>
+        <div class="stat-block">
+          <div class="stat-block-icon"><i class="ti ti-clipboard-list"></i></div>
+          <div class="stat-block-label">Total diagnoses</div>
+          <div class="stat-block-val" id="an-total">0</div>
+        </div>
+        <div class="stat-block stat-block-warn">
+          <div class="stat-block-icon"><i class="ti ti-alert-triangle"></i></div>
+          <div class="stat-block-label">High-risk cases</div>
+          <div class="stat-block-val" id="an-risk">0</div>
+        </div>
+        <div class="stat-block stat-block-violet">
+          <div class="stat-block-icon"><i class="ti ti-chart-line"></i></div>
+          <div class="stat-block-label">Avg confidence</div>
+          <div class="stat-block-val" id="an-conf">—</div>
+        </div>
       </div>
       <div class="panel panel-soft" style="margin-bottom:16px">
         <h4>Top symptoms</h4>
-        <div class="tags-row" id="an-tags"><span class="tag" style="color:var(--muted);background:transparent;border:none">No data yet.</span></div>
+        <div class="tags-row" id="an-tags"><span class="tag-empty">No data yet.</span></div>
       </div>
       <div id="an-list" class="history-list"></div>
     </div>
   </section>
 
+  <!-- ══ HISTORY VIEW ══════════════════════════════════════════════ -->
   <section id="view-history" class="view hidden">
     <div class="container">
       <div class="section-header">
-        <div><span class="section-label">History</span><h2>Saved sessions</h2></div>
+        <div><span class="section-label">History</span><h2>Saved <em>sessions</em></h2></div>
         <button class="btn btn-ghost btn-sm" onclick="go('dashboard')"><i class="ti ti-plus"></i> New diagnosis</button>
       </div>
       <div id="hist-list" class="history-list">
         <div class="hist-empty panel panel-soft">
+          <div class="hist-empty-icon"><i class="ti ti-history"></i></div>
           <p>No history yet. Sign in and run a diagnosis to save your reports.</p>
           <button class="btn btn-primary btn-sm" onclick="openAuth()">Sign in</button>
         </div>
@@ -251,10 +356,11 @@
     </div>
   </section>
 
+  <!-- ══ PROFILE VIEW ══════════════════════════════════════════════ -->
   <section id="view-profile" class="view hidden">
     <div class="container">
       <div class="section-header">
-        <div><span class="section-label">Profile</span><h2>Your account</h2></div>
+        <div><span class="section-label">Profile</span><h2>Your <em>account</em></h2></div>
         <button class="btn btn-ghost btn-sm" onclick="go('dashboard')"><i class="ti ti-arrow-left"></i> Back</button>
       </div>
       <div class="profile-grid">
@@ -280,11 +386,21 @@
 
 </main>
 
+<!-- ══ AUTH MODAL ═════════════════════════════════════════════════ -->
 <div class="overlay hidden" id="modal-auth" onclick="handleOverlay(event)">
   <div class="modal" role="dialog" aria-modal="true" aria-labelledby="auth-title">
-    <button class="modal-close" onclick="closeAuth()" aria-label="Close">×</button>
-    <h2 id="auth-title">Sign in</h2>
+    <button class="modal-close" onclick="closeAuth()" aria-label="Close"><i class="ti ti-x"></i></button>
+
+    <div class="modal-brand">
+  <div class="modal-brand-icon">
+    <i class="ti ti-stethoscope"></i>
+  </div>
+  
+  <div class="modal-brand-text">
+    <h2 id="auth-title">Sign <span>in</span></h2>
     <p class="modal-sub">Access history, analytics, and personalised results.</p>
+  </div>
+</div>
 
     <div class="social-grid">
       <button class="social-btn" onclick="socialAuth('google')">

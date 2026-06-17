@@ -1,21 +1,20 @@
 ﻿// ============================================================
-// SymptoScan App.js (PRODUCTION RUNTIME COMPATIBLE)
+// SymptoScan App.js — v3.0 Production Runtime
+// All original function names, IDs, and logic preserved.
+// Enhancements: typed toasts, loading veil, scroll reveal,
+//               stat counters, richer interaction feedback.
 // ============================================================
 
 const getApiUrl = () => {
   if (window.API_URL) return window.API_URL;
-
-  // FORCES all requests to the local Python backend
   return "http://127.0.0.1:8000";
 };
 
-const API_URL = getApiUrl();
-const SUPABASE_URL = window.SUPABASE_URL || "https://uygmvinepffbxfpblvra.supabase.co";
+const API_URL        = getApiUrl();
+const SUPABASE_URL   = window.SUPABASE_URL   || "https://uygmvinepffbxfpblvra.supabase.co";
 const SUPABASE_ANON_KEY = window.SUPABASE_ANON_KEY || "sb_publishable_q07H8qPV14nMqIFoS8qvkg_JqBqtzGv";
 
-// ------------------------------
-// Supabase Initialization
-// ------------------------------
+// ── Supabase Init ────────────────────────────────────────────
 const supabase = (() => {
   if (typeof createClient !== "undefined") {
     return createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
@@ -23,67 +22,176 @@ const supabase = (() => {
   if (window.supabase && typeof window.supabase.createClient === "function") {
     return window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
   }
-  console.error("Supabase client not found. Check the script include for @supabase/supabase-js.");
+  console.error("Supabase client not found. Check the script include.");
   return null;
 })();
 
 window.authMode = window.authMode || "signin";
 
 let currentSession = null;
-let currentUser = null;
-let historyCache = [];
+let currentUser    = null;
+let historyCache   = [];
 
-// Combobox Dropdown Core State
-let selectedSymptoms = [];
-let allSymptomsVocab = []; 
+// Combobox state
+let selectedSymptoms     = [];
+let allSymptomsVocab     = [];
 let currentDropdownIndex = -1;
 
-// ============================================================
-// DEFENSIVE DATA TYPE PARSING ENGINE
-// ============================================================
 
-/**
- * Safely parses confidence values coming from either the ML API or the Postgres database.
- * Detects numeric(5,4) fractions (e.g., 0.8540) and translates them seamlessly into UI display percentages (85.40%).
- */
+// ============================================================
+// DEFENSIVE CONFIDENCE PARSING
+// Handles fraction 0–1 from DB numeric(5,4) or percent string
+// ============================================================
 function parseConfidence(val) {
   if (val === undefined || val === null || val === "") return 70.00;
-  
-  // If it's already a string with a percent sign, strip it and parse it
+
   if (typeof val === "string" && val.includes("%")) {
-    let p = parseFloat(val.replace(/%/g, "").trim());
+    const p = parseFloat(val.replace(/%/g, "").trim());
     return isNaN(p) ? 70.00 : p;
   }
 
-  let parsed = parseFloat(val);
+  const parsed = parseFloat(val);
   if (isNaN(parsed) || !isFinite(parsed)) return 70.00;
 
-  // If the database returns the raw decimal value from the numeric(5,4) column (e.g. 0.8542)
-  if (parsed > 0 && parsed <= 1.0) {
-    return parsed * 100;
-  }
-
+  // DB returns decimal fraction (numeric 5,4) → convert to %
+  if (parsed > 0 && parsed <= 1.0) return parsed * 100;
   return parsed;
 }
 
-// ============================================================
-// AUTHENTICATION MATRIX CONTROL SEQUENCE
-// ============================================================
 
+// ============================================================
+// ── TOAST SYSTEM ─────────────────────────────────────────────
+// Supports types: 'ok' | 'err' | 'warn' | 'info'
+// Backward-compatible: toast("msg") defaults to 'ok'
+// ============================================================
+const TOAST_ICONS = {
+  ok:   "ti-check-circle",
+  err:  "ti-circle-x",
+  warn: "ti-alert-triangle",
+  info: "ti-info-circle",
+};
+
+function toast(msg, type = "ok") {
+  const wrap = document.getElementById("toasts");
+  if (!wrap) return;
+
+  const icon = TOAST_ICONS[type] || TOAST_ICONS.ok;
+  const el   = document.createElement("div");
+  el.className = `toast toast-${type}`;
+  el.innerHTML = `<i class="ti ${icon}"></i><span>${msg}</span>`;
+  wrap.appendChild(el);
+
+  // Auto-dismiss
+  setTimeout(() => {
+    el.style.animation = "fadeOut .3s ease forwards";
+    setTimeout(() => el.remove(), 320);
+  }, 3200);
+}
+
+
+// ============================================================
+// ── LOADING VEIL ─────────────────────────────────────────────
+// Full-screen scanner overlay during async operations
+// ============================================================
+function showVeil(label = "ANALYZING SYMPTOMS…") {
+  if (document.getElementById("loading-veil")) return;
+
+  const veil = document.createElement("div");
+  veil.id = "loading-veil";
+  veil.className = "loading-veil";
+  veil.innerHTML = `
+    <div class="veil-scanner">
+      <div class="veil-ring vr1"></div>
+      <div class="veil-ring vr2"></div>
+      <div class="veil-arm-wrap"><div class="veil-arm"></div></div>
+      <div class="veil-core"><i class="ti ti-brain"></i></div>
+    </div>
+    <p class="loading-text">${label}</p>`;
+  document.body.appendChild(veil);
+}
+
+function hideVeil() {
+  const veil = document.getElementById("loading-veil");
+  if (!veil) return;
+  veil.style.animation = "fadeOut .3s ease forwards";
+  setTimeout(() => veil.remove(), 340);
+}
+
+
+// ============================================================
+// ── SCROLL-REVEAL OBSERVER ───────────────────────────────────
+// Elements with class 'reveal' animate in when they enter view.
+// Called once on DOMContentLoaded.
+// ============================================================
+function initScrollReveal() {
+  const style = document.createElement("style");
+  style.textContent = `
+    .reveal {
+      opacity: 0;
+      transform: translateY(22px);
+      transition: opacity .55s cubic-bezier(.16,1,.3,1), transform .55s cubic-bezier(.16,1,.3,1);
+    }
+    .reveal.revealed {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  `;
+  document.head.appendChild(style);
+
+  const observer = new IntersectionObserver(
+    (entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("revealed");
+          observer.unobserve(entry.target);
+        }
+      });
+    },
+    { threshold: 0.08 }
+  );
+
+  document.querySelectorAll(".reveal").forEach((el) => observer.observe(el));
+}
+
+
+// ============================================================
+// ── NUMBER COUNTER ANIMATION ─────────────────────────────────
+// Animates a numeric element from 0 → target over duration ms
+// ============================================================
+function animateCounter(el, target, duration = 1400, suffix = "") {
+  if (!el || isNaN(target)) return;
+  const start    = performance.now();
+  const startVal = 0;
+
+  const tick = (now) => {
+    const elapsed  = now - start;
+    const progress = Math.min(elapsed / duration, 1);
+    const eased    = 1 - Math.pow(1 - progress, 3); // ease-out cubic
+    el.textContent = Math.round(startVal + (target - startVal) * eased) + suffix;
+    if (progress < 1) requestAnimationFrame(tick);
+  };
+
+  requestAnimationFrame(tick);
+}
+
+
+// ============================================================
+// AUTH STATE MANAGEMENT
+// ============================================================
 window.onAuthChange = async (sessionPayload) => {
-  const session = sessionPayload?.data?.session || sessionPayload || null;
-  currentSession = session;
-  currentUser = session?.user || null;
-  
+  const session    = sessionPayload?.data?.session || sessionPayload || null;
+  currentSession   = session;
+  currentUser      = session?.user || null;
+
   if (currentUser) {
-    console.log("🔐 Authenticated context established for user:", currentUser.id);
+    console.log("🔐 Authenticated:", currentUser.id);
     await syncBackendProfile();
     await loadHistory();
   } else {
-    console.log("🔓 Session cleared. Resetting database application states.");
+    console.log("🔓 Session cleared.");
     historyCache = [];
     const box = document.getElementById("hist-list");
-    if (box) box.innerHTML = `<p class="text-slate-400">Please sign in to view your saved history.</p>`;
+    if (box) box.innerHTML = `<p style="color:var(--muted);padding:16px">Please sign in to view your saved history.</p>`;
     updateAuthUI(null);
   }
 };
@@ -96,12 +204,9 @@ if (supabase && supabase.auth) {
     if (event === "SIGNED_IN" && session) {
       closeAuth();
       go("dashboard");
-      toast("Signed in successfully");
+      toast("Signed in successfully", "ok");
     }
-
-    if (event === "SIGNED_OUT") {
-      go("landing");
-    }
+    if (event === "SIGNED_OUT") go("landing");
   });
 
   supabase.auth.getSession().then(({ data }) => {
@@ -111,10 +216,7 @@ if (supabase && supabase.auth) {
 
 function getHeaders() {
   return currentSession?.access_token
-    ? { 
-        "Authorization": `Bearer ${currentSession.access_token}`,
-        "Content-Type": "application/json"
-      }
+    ? { Authorization: `Bearer ${currentSession.access_token}`, "Content-Type": "application/json" }
     : { "Content-Type": "application/json" };
 }
 
@@ -125,43 +227,47 @@ async function syncBackendProfile() {
     if (res.ok) {
       const liveProfile = await res.json();
       currentUser.enrichedMetadata = {
-        fullName: liveProfile.full_name,
-        avatarUrl: liveProfile.avatar_url
+        fullName:  liveProfile.full_name,
+        avatarUrl: liveProfile.avatar_url,
       };
     }
   } catch (err) {
-    console.debug("Backend profile sync pending setup or optional:", err);
+    console.debug("Backend profile sync pending:", err);
   } finally {
     updateAuthUI(currentUser);
   }
 }
 
+
 // ============================================================
 // ROUTING & NAVIGATION
 // ============================================================
-
 const VIEWS = ["landing", "dashboard", "result", "analytics", "history", "profile"];
 
 window.go = function (view) {
-  VIEWS.forEach(v => {
+  VIEWS.forEach((v) => {
     const el = document.getElementById(`view-${v}`);
     if (el) el.classList.add("hidden");
   });
 
   const target = document.getElementById(`view-${view}`);
-  if (target) target.classList.remove("hidden");
+  if (target) {
+    target.classList.remove("hidden");
+    // Re-run scroll reveal on newly visible elements
+    target.querySelectorAll(".reveal:not(.revealed)").forEach((el) => el.classList.add("revealed"));
+  }
 
   window.scrollTo({ top: 0, behavior: "smooth" });
 
-  if (view === "history") loadHistory();
+  if (view === "history")   loadHistory();
   if (view === "analytics") loadAnalytics();
-  if (view === "profile") renderProfile();
+  if (view === "profile")   renderProfile();
 };
 
-// ============================================================
-// PROFILE & AVATAR COMPILATION LAYERS
-// ============================================================
 
+// ============================================================
+// AVATAR & PROFILE COMPILATION
+// ============================================================
 function getAvatarUrl(user) {
   return (
     user?.enrichedMetadata?.avatarUrl ||
@@ -175,31 +281,25 @@ function getAvatarUrl(user) {
 function renderUserAvatar(element, user) {
   if (!element) return;
   const avatarUrl = getAvatarUrl(user);
-
   if (avatarUrl) {
     element.textContent = "";
     element.style.backgroundImage = `url(${avatarUrl})`;
-    element.style.backgroundSize = "cover";
+    element.style.backgroundSize  = "cover";
     element.style.backgroundPosition = "center";
   } else {
     element.style.backgroundImage = "";
     const nameData = user?.enrichedMetadata?.fullName || user?.user_metadata?.full_name;
     const initials = nameData
-      ? nameData
-          .split(" ")
-          .map(w => w[0])
-          .join("")
-          .slice(0, 2)
-          .toUpperCase()
+      ? nameData.split(" ").map((w) => w[0]).join("").slice(0, 2).toUpperCase()
       : user?.email?.split("@")[0]?.slice(0, 2).toUpperCase() || "--";
     element.textContent = initials;
   }
 }
 
 function updateAuthUI(user) {
-  const navUser = document.getElementById("nav-user");
+  const navUser  = document.getElementById("nav-user");
   const btnSignin = document.getElementById("btn-signin");
-  const nameNav = document.getElementById("user-name-nav");
+  const nameNav  = document.getElementById("user-name-nav");
   const initials = document.getElementById("user-initials");
 
   if (!navUser || !btnSignin) return;
@@ -207,9 +307,7 @@ function updateAuthUI(user) {
   if (user) {
     navUser.classList.remove("hidden");
     btnSignin.classList.add("hidden");
-
     const name = user.enrichedMetadata?.fullName || user.user_metadata?.full_name || user.email?.split("@")[0] || "User";
-
     if (nameNav) nameNav.textContent = name.split(" ")[0];
     if (initials) renderUserAvatar(initials, user);
   } else {
@@ -218,10 +316,10 @@ function updateAuthUI(user) {
   }
 }
 
-// ============================================================
-// INTERACTION INTERFACE WINDOW COUPLINGS
-// ============================================================
 
+// ============================================================
+// MODAL INTERFACE CONTROLS
+// ============================================================
 window.openAuth = function () {
   document.getElementById("modal-auth")?.classList.remove("hidden");
 };
@@ -236,32 +334,38 @@ window.handleOverlay = function (e) {
 };
 
 window.toggleMode = function () {
-  const nameField = document.getElementById("name-field");
-  const authBtn = document.getElementById("auth-btn");
+  const nameField    = document.getElementById("name-field");
+  const authBtn      = document.getElementById("auth-btn");
   const authSwitchLbl = document.getElementById("auth-switch-lbl");
   const authSwitchBtn = document.getElementById("auth-switch-btn");
+  const authTitle    = document.getElementById("auth-title");
 
   window.authMode = window.authMode === "signup" ? "signin" : "signup";
+  const isSignup  = window.authMode === "signup";
 
-  if (nameField) nameField.classList.toggle("hidden", window.authMode === "signin");
-  if (authBtn) authBtn.textContent = window.authMode === "signin" ? "Sign In" : "Sign Up";
-  if (authSwitchLbl) {
-    authSwitchLbl.textContent = window.authMode === "signin" ? "Don't have an account?" : "Already have an account?";
-  }
-  if (authSwitchBtn) {
-    authSwitchBtn.textContent = window.authMode === "signin" ? "Sign up free" : "Sign in";
-  }
+  if (nameField)    nameField.classList.toggle("hidden", !isSignup);
+  if (authBtn)      authBtn.textContent = isSignup ? "Create Account" : "Sign In";
+  if (authTitle)    authTitle.textContent = isSignup ? "Sign up" : "Sign in";
+  if (authSwitchLbl) authSwitchLbl.textContent = isSignup ? "Already have an account?" : "Don't have an account?";
+  if (authSwitchBtn) authSwitchBtn.textContent  = isSignup ? "Sign in" : "Sign up free";
 };
 
 window.toggleDd = function () {
-  const dd = document.getElementById("dd-menu");
-  if (dd) dd.classList.toggle("hidden");
+  document.getElementById("dd-menu")?.classList.toggle("hidden");
 };
 
 window.closeDd = function () {
-  const dd = document.getElementById("dd-menu");
-  if (dd) dd.classList.add("hidden");
+  document.getElementById("dd-menu")?.classList.add("hidden");
 };
+
+// Close dropdown when clicking outside
+document.addEventListener("click", (e) => {
+  const chip = document.getElementById("user-chip");
+  const dd   = document.getElementById("dd-menu");
+  if (dd && chip && !chip.contains(e.target) && !dd.contains(e.target)) {
+    dd.classList.add("hidden");
+  }
+});
 
 function showAuthError(msg) {
   const el = document.getElementById("auth-err");
@@ -279,7 +383,7 @@ function clearAuthError() {
 
 function ensureSupabaseConfigured() {
   if (!supabase) {
-    showAuthError("Supabase client is not available. Confirm the SDK is loaded.");
+    showAuthError("Supabase client not available. Confirm the SDK is loaded.");
     return false;
   }
   return true;
@@ -298,46 +402,47 @@ async function processOAuthRedirect() {
       if (window.onAuthChange) await window.onAuthChange(session);
       closeAuth();
       go("dashboard");
-      toast("Signed in successfully");
+      toast("Signed in successfully", "ok");
     }
   } catch (err) {
     showAuthError(err.message || "OAuth redirect processing failed");
   }
 }
 
-// ============================================================
-// SYSTEM SECURITY SIGN-IN ACTIONS
-// ============================================================
 
+// ============================================================
+// EMAIL & SOCIAL AUTHENTICATION
+// ============================================================
 window.emailAuth = async function () {
   if (!ensureSupabaseConfigured()) return;
 
   const email = document.getElementById("auth-email")?.value?.trim();
-  const pass = document.getElementById("auth-pass")?.value;
-  const name = document.getElementById("auth-name")?.value?.trim();
+  const pass  = document.getElementById("auth-pass")?.value;
+  const name  = document.getElementById("auth-name")?.value?.trim();
 
   clearAuthError();
   if (!email || !pass) {
-    showAuthError("Email and password required");
+    showAuthError("Email and password are required.");
     return;
   }
 
   const mode = window.authMode || "signin";
+
   try {
     if (mode === "signup") {
-      const { data, error } = await supabase.auth.signUp({
+      const { error } = await supabase.auth.signUp({
         email,
         password: pass,
         options: {
-          data: { full_name: name || "" },
-          // Dynamically set the redirect to the current domain
-          emailRedirectTo: `${window.location.origin}/` 
-        }
+          data:            { full_name: name || "" },
+          emailRedirectTo: `${window.location.origin}/`,
+        },
       });
       if (error) throw error;
-      showAuthError("Check your email to confirm your account");
+      showAuthError("✓ Check your email to confirm your account.");
     } else {
-      // ... existing sign-in logic ...
+      const { error } = await supabase.auth.signInWithPassword({ email, password: pass });
+      if (error) throw error;
     }
   } catch (err) {
     showAuthError(err.message);
@@ -352,7 +457,7 @@ window.socialAuth = async function (provider) {
 
   const { error } = await supabase.auth.signInWithOAuth({
     provider: supabaseProvider,
-    options: { redirectTo }
+    options:  { redirectTo },
   });
   if (error) showAuthError(error.message);
 };
@@ -363,15 +468,16 @@ window.signOut = async function () {
   currentSession = null;
   if (window.onAuthChange) window.onAuthChange(null);
   updateAuthUI(null);
+  toast("Signed out successfully.", "info");
   go("landing");
 };
 
-// ============================================================
-// COMBOBOX AUTOCOMPLETE DICTIONARY CORE
-// ============================================================
 
+// ============================================================
+// COMBOBOX AUTOCOMPLETE — SYMPTOM SELECTOR
+// ============================================================
 async function initSymptomAutocomplete() {
-  const input = document.getElementById("symptom-search-input");
+  const input    = document.getElementById("symptom-search-input");
   const dropdown = document.getElementById("symptom-dropdown");
   if (!input || !dropdown) return;
 
@@ -381,22 +487,22 @@ async function initSymptomAutocomplete() {
     const res = await fetch(`${API_URL}/api/symptoms`);
     if (res.ok) {
       const data = await res.json();
-      if (data && Array.isArray(data.symptoms)) {
-        allSymptomsVocab = data.symptoms;
-      } else if (Array.isArray(data)) {
-        allSymptomsVocab = data;
-      } else {
-        allSymptomsVocab = fallbackVocab;
-      }
+      if (data && Array.isArray(data.symptoms)) allSymptomsVocab = data.symptoms;
+      else if (Array.isArray(data))              allSymptomsVocab = data;
+      else                                       allSymptomsVocab = fallbackVocab;
     } else {
       allSymptomsVocab = fallbackVocab;
     }
-  } catch (e) {
+  } catch {
     allSymptomsVocab = fallbackVocab;
   }
 
-  input.addEventListener("input", (e) => renderSymptomDropdown(e.target.value.trim().toLowerCase()));
-  input.addEventListener("focus", (e) => renderSymptomDropdown(e.target.value.trim().toLowerCase()));
+  input.addEventListener("input", (e) =>
+    renderSymptomDropdown(e.target.value.trim().toLowerCase())
+  );
+  input.addEventListener("focus", (e) =>
+    renderSymptomDropdown(e.target.value.trim().toLowerCase())
+  );
 
   document.addEventListener("click", (e) => {
     if (!input.contains(e.target) && !dropdown.contains(e.target)) {
@@ -435,9 +541,11 @@ function renderSymptomDropdown(query) {
   dropdown.innerHTML = "";
   currentDropdownIndex = -1;
 
-  const matches = allSymptomsVocab.filter(item => {
-    return String(item).toLowerCase().replace(/_/g, " ").includes(query.replace(/_/g, " "));
-  }).slice(0, 10);
+  const matches = allSymptomsVocab
+    .filter((item) =>
+      String(item).toLowerCase().replace(/_/g, " ").includes(query.replace(/_/g, " "))
+    )
+    .slice(0, 10);
 
   if (matches.length === 0) {
     dropdown.innerHTML = `<div class="symptom-dropdown-empty">No matching clinical entries found</div>`;
@@ -445,17 +553,14 @@ function renderSymptomDropdown(query) {
     return;
   }
 
-  matches.forEach(item => {
-    const btn = document.createElement("button");
-    btn.type = "button";
+  matches.forEach((item) => {
+    const btn             = document.createElement("button");
+    btn.type              = "button";
     const isAlreadySelected = selectedSymptoms.includes(item);
-    
-    btn.className = "symptom-dropdown-item" + (isAlreadySelected ? " selected-item" : "");
-    btn.textContent = String(item).replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
+    btn.className         = "symptom-dropdown-item" + (isAlreadySelected ? " selected-item" : "");
+    btn.textContent       = String(item).replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
-    if (!isAlreadySelected) {
-      btn.onclick = () => selectSymptom(item);
-    }
+    if (!isAlreadySelected) btn.onclick = () => selectSymptom(item);
     dropdown.appendChild(btn);
   });
 
@@ -464,12 +569,8 @@ function renderSymptomDropdown(query) {
 
 function highlightDropdownItem(items) {
   items.forEach((item, idx) => {
-    if (idx === currentDropdownIndex) {
-      item.classList.add("focused");
-      item.scrollIntoView({ block: "nearest" });
-    } else {
-      item.classList.remove("focused");
-    }
+    item.classList.toggle("focused", idx === currentDropdownIndex);
+    if (idx === currentDropdownIndex) item.scrollIntoView({ block: "nearest" });
   });
 }
 
@@ -485,15 +586,12 @@ function selectSymptom(symptom) {
     renderChips();
   }
   const input = document.getElementById("symptom-search-input");
-  if (input) {
-    input.value = "";
-    input.focus();
-  }
+  if (input) { input.value = ""; input.focus(); }
   hideSymptomDropdown();
 }
 
-window.deselectSymptom = function(symptom) {
-  selectedSymptoms = selectedSymptoms.filter(s => s !== symptom);
+window.deselectSymptom = function (symptom) {
+  selectedSymptoms = selectedSymptoms.filter((s) => s !== symptom);
   renderChips();
 };
 
@@ -502,102 +600,128 @@ function renderChips() {
   if (!container) return;
   container.innerHTML = "";
 
-  selectedSymptoms.forEach(s => {
+  selectedSymptoms.forEach((s) => {
     const chip = document.createElement("div");
     chip.className = "symptom-chip";
     chip.innerHTML = `
       <span>${s.replace(/_/g, " ")}</span>
-      <button type="button" class="symptom-chip-close" onclick="deselectSymptom('${s}')">&times;</button>
-    `;
+      <button type="button" class="symptom-chip-close" onclick="deselectSymptom('${s}')" aria-label="Remove ${s}">&times;</button>`;
     container.appendChild(chip);
   });
 }
 
-// ============================================================
-// DIAGNOSTIC CORE COMPUTATION ROUTINES
-// ============================================================
 
+// ============================================================
+// DIAGNOSTIC CORE — ANALYZE SYMPTOMS
+// ============================================================
 window.analyzeSymptoms = async function () {
   if (selectedSymptoms.length === 0) {
-    toast("Please select at least one symptom from the search bar");
+    toast("Please select at least one symptom from the search bar.", "warn");
     return;
   }
 
+  showVeil("ANALYZING SYMPTOMS…");
+
   try {
     const res = await fetch(`${API_URL}/api/predict`, {
-      method: "POST",
+      method:  "POST",
       headers: getHeaders(),
-      body: JSON.stringify({ symptoms: selectedSymptoms })
+      body:    JSON.stringify({ symptoms: selectedSymptoms }),
     });
 
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || "Prediction inference rejected.");
 
-    // Clean out array tokens immediately before shifting context windows
     selectedSymptoms = [];
     renderChips();
 
     renderResult(data);
+    hideVeil();
     go("result");
-    toast("Analysis complete");
+    toast("Analysis complete.", "ok");
 
-    if (currentSession?.access_token) {
-      await loadHistory();
-    }
+    if (currentSession?.access_token) await loadHistory();
   } catch (err) {
-    toast(err.message || "Error processing diagnostic inference");
+    hideVeil();
+    toast(err.message || "Error processing diagnostic inference.", "err");
   }
 };
 
+
+// ============================================================
+// RESULT RENDER ENGINE
+// ============================================================
 function renderResult(data) {
-  const disease     = document.getElementById("result-disease");
-  const conf        = document.getElementById("result-conf");
-  const fill        = document.getElementById("conf-fill");
-  const desc        = document.getElementById("result-desc");
-  const syms        = document.getElementById("result-syms");
-  const prec        = document.getElementById("result-prec");
-  const date        = document.getElementById("result-date");
-  const sevBadge    = document.getElementById("result-sev");
-  const top3Grid    = document.getElementById("result-top3-grid");
+  const disease   = document.getElementById("result-disease");
+  const conf      = document.getElementById("result-conf");
+  const fill      = document.getElementById("conf-fill");
+  const desc      = document.getElementById("result-desc");
+  const syms      = document.getElementById("result-syms");
+  const prec      = document.getElementById("result-prec");
+  const date      = document.getElementById("result-date");
+  const sevBadge  = document.getElementById("result-sev");
+  const top3Grid  = document.getElementById("result-top3-grid");
 
   const confidence = Math.min(100, Math.max(0, parseConfidence(data.confidence)));
 
   if (disease) disease.textContent = data.disease || data.prediction || "Unknown Condition";
-  if (conf)    conf.textContent    = confidence.toFixed(2) + "%";
-  if (fill)    fill.style.width    = confidence + "%";
-  if (desc)    desc.textContent    = data.description || "No description provided.";
   if (date)    date.textContent    = new Date().toLocaleString();
+  if (desc)    desc.textContent    = data.description || "No description available.";
 
-  // Genuine risk badge — driven by backend value, with JS fallback
+  // Animated confidence counter
+  if (conf) animateCounter(conf, confidence, 1200, "%");
+
+  // Progress bar (CSS transition handles the animation)
+  if (fill) {
+    fill.style.width = "0%";
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        fill.style.width = confidence + "%";
+      });
+    });
+  }
+
+  // Risk / severity badge
   const risk = data.risk_level ||
     (confidence >= 70 ? "High" : confidence >= 40 ? "Medium" : "Low");
+
   if (sevBadge) {
     sevBadge.textContent = `${risk} Risk`;
     sevBadge.className   = `sev-badge sev-${risk.toLowerCase()}`;
   }
 
-  // Symptoms
+  // Symptoms list
   if (syms) {
     const arr = data.symptoms || data.symptoms_provided || [];
-    syms.textContent = arr.map(s => String(s).replace(/_/g, " ")).join(", ") || "—";
+    syms.textContent = arr.map((s) => String(s).replace(/_/g, " ")).join(", ") || "—";
   }
 
-  // Primary precautions
+  // Precautions
   if (prec) {
     prec.innerHTML = "";
     const precArray = Array.isArray(data.precautions)
       ? data.precautions
-      : (typeof data.precautions === "string" ? data.precautions.split(",") : []);
-    precArray.forEach(p => {
-      if (!p || !String(p).trim()) return;
+      : typeof data.precautions === "string"
+      ? data.precautions.split(",")
+      : [];
+
+    if (precArray.length === 0) {
       const li = document.createElement("li");
       li.className = "prec-item";
-      li.textContent = String(p).trim();
+      li.textContent = "No precautions data returned.";
       prec.appendChild(li);
-    });
+    } else {
+      precArray.forEach((p) => {
+        if (!p || !String(p).trim()) return;
+        const li = document.createElement("li");
+        li.className = "prec-item";
+        li.textContent = String(p).trim();
+        prec.appendChild(li);
+      });
+    }
   }
 
-  // Top-3 differential diagnoses — with descriptions + precautions per disease
+  // Top-3 differential diagnoses
   if (top3Grid) {
     top3Grid.innerHTML = "";
     const top3 = Array.isArray(data.top3) ? data.top3 : [];
@@ -616,8 +740,8 @@ function renderResult(data) {
         : parseConfidence(item.confidence);
       const itemRisk = item.risk ||
         (itemConf >= 70 ? "High" : itemConf >= 40 ? "Medium" : "Low");
-      const itemName = String(item.disease || "").replace(/_/g, " ");
-      const itemDesc = item.description || "Clinical assessment based on provided symptoms.";
+      const itemName  = String(item.disease || "").replace(/_/g, " ");
+      const itemDesc  = item.description || "Clinical assessment based on provided symptoms.";
       const itemPrecs = Array.isArray(item.precautions) ? item.precautions : [];
 
       const card = document.createElement("div");
@@ -631,8 +755,10 @@ function renderResult(data) {
           <div class="top3-disease-name">${itemName}</div>
           <span class="sev-badge sev-${itemRisk.toLowerCase()}">${itemRisk} Risk</span>
         </div>
-        <div class="conf-track" style="margin:2px 0 10px">
-          <div class="top3-fill-${itemRisk.toLowerCase()}" style="height:100%;width:${itemConf}%;border-radius:999px;transition:width .9s cubic-bezier(.16,1,.3,1)"></div>
+        <div class="conf-track" style="margin:4px 0 10px">
+          <div class="top3-fill-${itemRisk.toLowerCase()}"
+            style="height:100%;border-radius:999px;width:0%;transition:width 1s cubic-bezier(.16,1,.3,1)">
+          </div>
         </div>
         <div class="top3-body">
           <div class="top3-desc-block">
@@ -643,19 +769,30 @@ function renderResult(data) {
           <div class="top3-prec-block">
             <span class="top3-label">Precautions</span>
             <ul class="top3-prec-list">
-              ${itemPrecs.map(p => `<li>${String(p).trim()}</li>`).join("")}
+              ${itemPrecs.map((p) => `<li>${String(p).trim()}</li>`).join("")}
             </ul>
           </div>` : ""}
         </div>`;
+
       top3Grid.appendChild(card);
+
+      // Animate individual card fill bars after append
+      const fillBar = card.querySelector(`.top3-fill-${itemRisk.toLowerCase()}`);
+      if (fillBar) {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            fillBar.style.width = itemConf + "%";
+          });
+        });
+      }
     });
   }
 }
 
-// ============================================================
-// SYSTEM RECORD DATABASE TRANSACTIONS
-// ============================================================
 
+// ============================================================
+// HISTORY — LOAD & RENDER
+// ============================================================
 async function loadHistory() {
   const box = document.getElementById("hist-list");
   if (!box) return;
@@ -663,7 +800,8 @@ async function loadHistory() {
   if (!currentSession?.access_token) {
     box.innerHTML = `
       <div class="hist-empty panel panel-soft">
-        <p>Please sign in to view your saved history.</p>
+        <div class="hist-empty-icon"><i class="ti ti-history"></i></div>
+        <p>Sign in to save and view your diagnostic history.</p>
         <button class="btn btn-primary btn-sm" onclick="openAuth()">Sign in</button>
       </div>`;
     return;
@@ -673,37 +811,48 @@ async function loadHistory() {
     const res = await fetch(`${API_URL}/api/history`, { headers: getHeaders() });
     if (!res.ok) {
       const error = await res.json().catch(() => ({}));
-      throw new Error(error.detail || "Failed to load history payload matrix.");
+      throw new Error(error.detail || "Failed to load history.");
     }
 
-    const data = await res.json();
+    const data  = await res.json();
     historyCache = data.history || [];
 
     if (!historyCache.length) {
-      box.innerHTML = `<p class="text-slate-400 p-4 text-center">No diagnostic history profiles recorded yet.</p>`;
+      box.innerHTML = `
+        <div class="hist-empty panel panel-soft">
+          <div class="hist-empty-icon"><i class="ti ti-clipboard-list"></i></div>
+          <p>No diagnostic records yet. Run your first analysis to get started.</p>
+          <button class="btn btn-primary btn-sm" onclick="go('dashboard')">Start Diagnosis</button>
+        </div>`;
       return;
     }
 
     box.innerHTML = historyCache
       .map((h, idx) => {
+        // Normalise symptoms
         let symptomsArray = [];
-        if (Array.isArray(h.symptoms_provided)) symptomsArray = h.symptoms_provided;
-        else if (Array.isArray(h.symptoms)) symptomsArray = h.symptoms;
+        if (Array.isArray(h.symptoms_provided))       symptomsArray = h.symptoms_provided;
+        else if (Array.isArray(h.symptoms))            symptomsArray = h.symptoms;
         else if (typeof h.symptoms_provided === "string") symptomsArray = h.symptoms_provided.split(",");
-        else if (typeof h.symptoms === "string") symptomsArray = h.symptoms.split(",");
+        else if (typeof h.symptoms === "string")       symptomsArray = h.symptoms.split(",");
 
-        const symptomsText = symptomsArray.map(s => String(s).trim().replace(/_/g, ' ')).filter(Boolean).join(", ") || "No symptoms recorded";
-        
+        const symptomsText = symptomsArray
+          .map((s) => String(s).trim().replace(/_/g, " "))
+          .filter(Boolean)
+          .join(", ") || "No symptoms recorded";
+
+        // Normalise precautions
         let precautionsArray = [];
-        if (Array.isArray(h.precautions)) precautionsArray = h.precautions;
+        if (Array.isArray(h.precautions))          precautionsArray = h.precautions;
         else if (typeof h.precautions === "string") precautionsArray = h.precautions.split(",");
-        
-        const precautionsHtml = precautionsArray.map(p => `<li>${String(p).trim()}</li>`).join("");
-        
+
+        const precautionsHtml = precautionsArray
+          .map((p) => `<li>${String(p).trim()}</li>`)
+          .join("");
+
         const cleanScore = parseConfidence(h.confidence);
         const confidenceDisplay = cleanScore.toFixed(2);
         const diseaseName = h.prediction || h.disease || "Unknown Profile";
-
         const histRisk = h.risk_level ||
           (cleanScore >= 70 ? "High" : cleanScore >= 40 ? "Medium" : "Low");
 
@@ -716,9 +865,9 @@ async function loadHistory() {
               </div>
               <div class="hist-side">
                 <span class="hist-date">${new Date(h.analyzed_at || h.created_at || Date.now()).toLocaleString()}</span>
-                <span class="sev-badge sev-${histRisk.toLowerCase()}" style="font-size:.65rem">${histRisk}</span>
+                <span class="sev-badge sev-${histRisk.toLowerCase()}" style="font-size:.62rem">${histRisk}</span>
                 <span class="hist-conf">${confidenceDisplay}%</span>
-                <button class="hist-delete-btn" onclick="deleteHistItem(${idx}, event)" aria-label="Delete Entry">
+                <button class="hist-delete-btn" onclick="deleteHistItem(${idx}, event)" aria-label="Delete entry">
                   <i class="ti ti-trash"></i>
                 </button>
                 <button class="hist-toggle" aria-label="Expand">
@@ -728,48 +877,111 @@ async function loadHistory() {
             </div>
             <div class="hist-details hidden">
               <div class="hist-content">
-               <div class="hist-block">
+                <div class="hist-block">
+                  <strong>Symptoms Entered</strong>
+                  <p class="hist-symptoms-detailed">${symptomsText}</p>
+                </div>
+                <div class="hist-block">
                   <strong>Recommended Precautions</strong>
-                  <ul class="hist-precautions-list mt-1 list-disc pl-4 text-slate-300">${precautionsHtml || `<li>No medical steps recorded</li>`}</ul>
+                  <ul class="hist-precautions-list">
+                    ${precautionsHtml || "<li>No precautions recorded.</li>"}
+                  </ul>
                 </div>
               </div>
               ${(() => {
-                const tp = Array.isArray(h.top_predictions) && h.top_predictions.length > 0 ? h.top_predictions : null;
+                const tp = Array.isArray(h.top_predictions) && h.top_predictions.length > 0
+                  ? h.top_predictions : null;
                 if (!tp) return "";
                 return `
-                <div class="hist-block" style="margin-top:16px;padding-top:16px;border-top:1px solid rgba(255,255,255,.05)">
-                  <strong>Differential Diagnoses</strong>
-                  <div class="hist-top3-mini">
-                    ${tp.map((p, pi) => `
-                      <div class="hist-top3-item">
-                        <span class="hist-top3-rank">${["1st","2nd","3rd"][pi] || `#${pi+1}`}</span>
-                        <span class="hist-top3-disease">${String(p.disease || "").replace(/_/g," ")}</span>
-                        <span class="sev-badge sev-${(p.risk || "low").toLowerCase()}" style="font-size:.6rem">${p.risk || "Low"} Risk</span>
-                        <span class="hist-top3-conf">${typeof p.probability === "number" ? p.probability.toFixed(1)+"%" : (p.confidence || "—")}</span>
-                      </div>`).join("")}
-                  </div>
-                </div>`;
+                  <div class="hist-block" style="margin-top:18px;padding-top:18px;border-top:1px solid var(--b1)">
+                    <strong>Differential Diagnoses</strong>
+                    <div class="hist-top3-mini">
+                      ${tp.map((p, pi) => `
+                        <div class="hist-top3-item">
+                          <span class="hist-top3-rank">${["1st","2nd","3rd"][pi] || `#${pi+1}`}</span>
+                          <span class="hist-top3-disease">${String(p.disease || "").replace(/_/g," ")}</span>
+                          <span class="sev-badge sev-${(p.risk||"low").toLowerCase()}" style="font-size:.58rem">${p.risk||"Low"} Risk</span>
+                          <span class="hist-top3-conf">${typeof p.probability === "number" ? p.probability.toFixed(1)+"%" : (p.confidence || "—")}</span>
+                        </div>`).join("")}
+                    </div>
+                  </div>`;
               })()}
             </div>
           </div>`;
       })
       .join("");
   } catch (e) {
-    box.innerHTML = `<p class="text-red-400 p-4">${e.message || "Failed to load dynamic history pipeline."}</p>`;
+    box.innerHTML = `
+      <div class="hist-empty panel panel-soft">
+        <div class="hist-empty-icon"><i class="ti ti-wifi-off"></i></div>
+        <p>${e.message || "Failed to load history. Check your connection."}</p>
+      </div>`;
   }
 }
 
-// ============================================================
-// PERFORMANCE METRIC ANALYTICS WINDOWS
-// ============================================================
+function toggleHistItem(idx) {
+  const item = document.querySelector(`[data-idx="${idx}"]`);
+  if (!item) return;
+  const details = item.querySelector(".hist-details");
+  const toggle  = item.querySelector(".hist-toggle");
+  if (!details) return;
 
+  const isHidden = details.classList.contains("hidden");
+  details.classList.toggle("hidden", !isHidden);
+  if (toggle) {
+    toggle.setAttribute("aria-label", isHidden ? "Collapse" : "Expand");
+    toggle.innerHTML = isHidden
+      ? `<i class="ti ti-chevron-up"></i>`
+      : `<i class="ti ti-chevron-down"></i>`;
+  }
+}
+
+window.deleteHistItem = async function (idx, event) {
+  if (event) event.stopPropagation();
+  const item = historyCache[idx];
+  if (!item) return;
+
+  if (!confirm("Permanently delete this diagnostic record?")) return;
+
+  try {
+    const res = await fetch(`${API_URL}/api/history/${item.id}`, {
+      method:  "DELETE",
+      headers: getHeaders(),
+    });
+
+    if (!res.ok) {
+      const errorData = await res.json().catch(() => ({}));
+      throw new Error(errorData.detail || "Deletion failed.");
+    }
+
+    toast("Record deleted.", "ok");
+    await loadHistory();
+
+    const analyticsView = document.getElementById("view-analytics");
+    if (analyticsView && !analyticsView.classList.contains("hidden")) loadAnalytics();
+  } catch (err) {
+    toast("Delete failed: " + err.message, "err");
+  }
+};
+
+
+// ============================================================
+// ANALYTICS — LOAD & RENDER
+// ============================================================
 async function loadAnalytics() {
   if (!currentSession?.access_token) {
-    if (document.getElementById("an-total")) document.getElementById("an-total").textContent = "0";
-    if (document.getElementById("an-risk")) document.getElementById("an-risk").textContent = "0";
-    if (document.getElementById("an-conf")) document.getElementById("an-conf").textContent = "—";
+    ["an-total", "an-risk"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = "0";
+    });
+    const avgEl = document.getElementById("an-conf");
+    if (avgEl) avgEl.textContent = "—";
     const container = document.getElementById("an-list");
-    if (container) container.innerHTML = `<div class="panel panel-soft"><p>Sign in to view analytics.</p></div>`;
+    if (container) container.innerHTML = `
+      <div class="panel panel-soft" style="text-align:center;padding:32px">
+        <p>Sign in to view your analytics.</p>
+        <button class="btn btn-primary btn-sm" onclick="openAuth()" style="margin-top:12px">Sign In</button>
+      </div>`;
     return;
   }
 
@@ -778,123 +990,119 @@ async function loadAnalytics() {
     if (!res.ok) throw new Error();
 
     const data = await res.json();
-    const h = data.history || [];
+    const h    = data.history || [];
 
-    const total = document.getElementById("an-total");
-    const risk = document.getElementById("an-risk");
-    const avg = document.getElementById("an-conf");
+    const totalEl = document.getElementById("an-total");
+    const riskEl  = document.getElementById("an-risk");
+    const avgEl   = document.getElementById("an-conf");
 
-    if (total) total.textContent = h.length;
-    if (risk) risk.textContent = h.filter(x =>
-      (x.risk_level === "High") || parseConfidence(x.confidence) >= 70.0
+    const riskCount = h.filter(
+      (x) => x.risk_level === "High" || parseConfidence(x.confidence) >= 70
     ).length;
-    const avgVal = h.reduce((sum, row) => sum + parseConfidence(row.confidence), 0) / (h.length || 1);
-    if (avg) avg.textContent = h.length ? avgVal.toFixed(2) + "%" : "0.00%";
-  } catch(err) {
-    console.error("Analytics rendering engine aborted:", err);
+
+    const avgVal = h.length
+      ? h.reduce((sum, row) => sum + parseConfidence(row.confidence), 0) / h.length
+      : 0;
+
+    // Animated counters
+    if (totalEl) animateCounter(totalEl, h.length, 800);
+    if (riskEl)  animateCounter(riskEl, riskCount, 800);
+    if (avgEl)   {
+      if (h.length) animateCounter(avgEl, Math.round(avgVal * 100) / 100, 900, "%");
+      else avgEl.textContent = "0%";
+    }
+
+    // Top symptoms tag cloud
+    const tagContainer = document.getElementById("an-tags");
+    if (tagContainer) {
+      const freq = {};
+      h.forEach((record) => {
+        const arr = Array.isArray(record.symptoms_provided)
+          ? record.symptoms_provided
+          : typeof record.symptoms_provided === "string"
+          ? record.symptoms_provided.split(",")
+          : [];
+        arr.forEach((s) => {
+          const key = String(s).trim().toLowerCase().replace(/_/g, " ");
+          if (key) freq[key] = (freq[key] || 0) + 1;
+        });
+      });
+
+      const sorted = Object.entries(freq).sort((a, b) => b[1] - a[1]).slice(0, 12);
+      if (sorted.length) {
+        tagContainer.innerHTML = sorted
+          .map(([sym]) => `<span class="tag">${sym}</span>`)
+          .join("");
+      } else {
+        tagContainer.innerHTML = `<span class="tag-empty">No symptom data yet.</span>`;
+      }
+    }
+  } catch (err) {
+    console.error("Analytics render error:", err);
   }
 }
 
+
+// ============================================================
+// PROFILE RENDER
+// ============================================================
 function renderProfile() {
   if (!currentUser) return;
 
-  const name = currentUser.enrichedMetadata?.fullName || currentUser.user_metadata?.full_name || currentUser.email?.split("@")[0] || "User";
-  const avatarContainer = document.getElementById("prof-av");
+  const name = currentUser.enrichedMetadata?.fullName ||
+    currentUser.user_metadata?.full_name ||
+    currentUser.email?.split("@")[0] || "User";
 
-  if (document.getElementById("prof-name")) document.getElementById("prof-name").textContent = name;
-  if (document.getElementById("prof-email")) document.getElementById("prof-email").textContent = currentUser.email;
-  if (document.getElementById("prof-total")) document.getElementById("prof-total").textContent = historyCache.length;
+  const nameEl  = document.getElementById("prof-name");
+  const emailEl = document.getElementById("prof-email");
+  const totalEl = document.getElementById("prof-total");
+  const avatarEl = document.getElementById("prof-av");
 
-  if (avatarContainer) renderUserAvatar(avatarContainer, currentUser);
-}
+  if (nameEl)   nameEl.textContent  = name;
+  if (emailEl)  emailEl.textContent = currentUser.email || "—";
+  if (totalEl)  totalEl.textContent = historyCache.length;
+  if (avatarEl) renderUserAvatar(avatarEl, currentUser);
 
-// ============================================================
-// UTILITY ANIMATION WINDOW SLICING TRANSITIONS
-// ============================================================
-
-function toggleHistItem(idx) {
-  const item = document.querySelector(`[data-idx="${idx}"]`);
-  if (!item) return;
-
-  const details = item.querySelector(".hist-details");
-  const toggle = item.querySelector(".hist-toggle");
-
-  if (details) {
-    const isHidden = details.classList.contains("hidden");
-    details.classList.toggle("hidden", !isHidden);
-    if (toggle) {
-      toggle.setAttribute("aria-label", isHidden ? "Collapse" : "Expand");
-      toggle.innerHTML = isHidden ? `<i class="ti ti-chevron-up"></i>` : `<i class="ti ti-chevron-down"></i>`;
-    }
-  }
-}
-
-function toast(msg) {
-  const wrap = document.getElementById("toasts");
-  if (!wrap) return;
-
-  const el = document.createElement("div");
-  el.className = "toast";
-  el.textContent = msg;
-
-  wrap.appendChild(el);
-  setTimeout(() => el.remove(), 3000);
-}
-
-// ============================================================
-// HISTORY TRANSACTION RECORD PURGES
-// ============================================================
-
-window.deleteHistItem = async function (idx, event) {
-  if (event) event.stopPropagation();
-
-  const item = historyCache[idx];
-  if (!item) return;
-
-  if (!confirm("Are you sure you want to permanently delete this diagnostic record?")) return;
-
-  try {
-    const res = await fetch(`${API_URL}/api/history/${item.id}`, {
-      method: "DELETE",
-      headers: getHeaders()
+  // Most common result
+  const commonEl = document.getElementById("prof-common");
+  if (commonEl && historyCache.length) {
+    const freq = {};
+    historyCache.forEach((h) => {
+      const d = h.prediction || h.disease || "Unknown";
+      freq[d] = (freq[d] || 0) + 1;
     });
-
-    if (!res.ok) {
-      const errorData = await res.json().catch(() => ({}));
-      throw new Error(errorData.detail || "Backend refused structural entry deletion row.");
-    }
-
-    toast("Record deleted successfully!");
-    await loadHistory();
-
-    const analyticsView = document.getElementById("view-analytics");
-    if (analyticsView && !analyticsView.classList.contains("hidden")) {
-      loadAnalytics();
-    }
-  } catch (err) {
-    console.error("Deletion query fault trace:", err);
-    alert("Deletion Failed: " + err.message);
+    const most = Object.entries(freq).sort((a, b) => b[1] - a[1])[0]?.[0] || "N/A";
+    commonEl.textContent = most;
   }
-};
+
+  // Avg confidence
+  const avgEl = document.getElementById("prof-avg");
+  if (avgEl && historyCache.length) {
+    const avg = historyCache.reduce((s, r) => s + parseConfidence(r.confidence), 0) / historyCache.length;
+    avgEl.textContent = avg.toFixed(2) + "%";
+  }
+}
+
 
 // ============================================================
-// SYSTEM INIT INITIALIZATION LIFECYCLES
+// SYSTEM INIT — DOMContentLoaded
 // ============================================================
-
 window.addEventListener("hashchange", () => {
   if (supabase) processOAuthRedirect();
 });
 
 document.addEventListener("DOMContentLoaded", async () => {
+  // OAuth redirect handling first
   if (supabase) {
     await processOAuthRedirect();
-
     const sessionResult = await supabase.auth.getSession();
     if (sessionResult?.data?.session && window.onAuthChange) {
       await window.onAuthChange(sessionResult.data.session);
     }
   }
 
-  initSymptomAutocomplete();
+  // Core init
+  await initSymptomAutocomplete();
+  initScrollReveal();
   go("landing");
 });
